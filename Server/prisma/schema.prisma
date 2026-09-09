@@ -1,0 +1,207 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model categories {
+  category_id        Int          @id @default(autoincrement())
+  shop_id            Int
+  parent_category_id Int?
+  name               String       @db.VarChar(100)
+  description        String?      @db.VarChar(255)
+  created_by         Int
+  created_at         DateTime     @default(now()) @db.Timestamp(0)
+  updated_at         DateTime     @default(now()) @db.Timestamp(0)
+  users              users        @relation(fields: [created_by], references: [user_id], onUpdate: Restrict, map: "fk_categories_created_by")
+  categories         categories?  @relation("categoriesTocategories", fields: [parent_category_id], references: [category_id], onDelete: Restrict, onUpdate: Restrict, map: "fk_categories_parent")
+  other_categories   categories[] @relation("categoriesTocategories")
+  shops              shops        @relation(fields: [shop_id], references: [shop_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_categories_shop")
+  products           products[]
+
+  @@unique([shop_id, name], map: "uq_category_name_per_shop")
+  @@index([created_by], map: "fk_categories_created_by")
+  @@index([parent_category_id], map: "fk_categories_parent")
+}
+
+model payments {
+  payment_id      Int             @id @default(autoincrement())
+  transaction_id  Int             @unique(map: "transaction_id")
+  method          payments_method
+  amount_tendered Decimal         @db.Decimal(12, 2)
+  change_given    Decimal         @default(0.00) @db.Decimal(12, 2)
+  created_at      DateTime        @default(now()) @db.Timestamp(0)
+  transactions    transactions    @relation(fields: [transaction_id], references: [transaction_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_payments_transaction")
+}
+
+model products {
+  product_id       Int                      @id @default(autoincrement())
+  shop_id          Int
+  category_id      Int
+  barcode          String?                  @db.VarChar(50)
+  barcode_source   products_barcode_source?
+  name             String                   @db.VarChar(150)
+  cost_price       Decimal?                 @db.Decimal(12, 2)
+  selling_price    Decimal                  @db.Decimal(12, 2)
+  quantity         Int                      @default(0)
+  low_stock_level  Int                      @default(0)
+  created_by       Int
+  created_at       DateTime                 @default(now()) @db.Timestamp(0)
+  updated_at       DateTime                 @default(now()) @db.Timestamp(0)
+  image_url        String?                  @db.VarChar(500)
+  brand            String?                  @db.VarChar(100)
+  categories       categories               @relation(fields: [category_id], references: [category_id], onUpdate: Restrict, map: "fk_products_category")
+  users            users                    @relation(fields: [created_by], references: [user_id], onUpdate: Restrict, map: "fk_products_created_by")
+  shops            shops                    @relation(fields: [shop_id], references: [shop_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_products_shop")
+  purchase_batches purchase_batches[]
+  sale_items       sale_items[]
+  stock_movements  stock_movements[]
+
+  @@unique([shop_id, barcode], map: "uq_barcode_per_shop")
+  @@index([category_id], map: "fk_products_category")
+  @@index([created_by], map: "fk_products_created_by")
+}
+
+model purchase_batches {
+  batch_id    Int      @id @default(autoincrement())
+  shop_id     Int
+  product_id  Int
+  quantity    Int
+  total_cost  Decimal  @db.Decimal(12, 2)
+  unit_cost   Decimal? @db.Decimal(12, 2)
+  recorded_by Int
+  created_at  DateTime @default(now()) @db.Timestamp(0)
+  products    products @relation(fields: [product_id], references: [product_id], onUpdate: Restrict, map: "fk_batches_product")
+  users       users    @relation(fields: [recorded_by], references: [user_id], onUpdate: Restrict, map: "fk_batches_recorded_by")
+  shops       shops    @relation(fields: [shop_id], references: [shop_id], onUpdate: Restrict, map: "fk_batches_shop")
+
+  @@index([product_id], map: "fk_batches_product")
+  @@index([recorded_by], map: "fk_batches_recorded_by")
+  @@index([shop_id], map: "fk_batches_shop")
+}
+
+model sale_items {
+  sale_item_id  Int      @id @default(autoincrement())
+  sale_id       Int
+  product_id    Int
+  quantity      Int
+  price_at_sale Decimal  @db.Decimal(12, 2)
+  created_at    DateTime @default(now()) @db.Timestamp(0)
+  products      products @relation(fields: [product_id], references: [product_id], onUpdate: Restrict, map: "fk_sale_items_product")
+  sales         sales    @relation(fields: [sale_id], references: [sale_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_sale_items_sale")
+
+  @@index([product_id], map: "fk_sale_items_product")
+  @@index([sale_id], map: "fk_sale_items_sale")
+}
+
+model sales {
+  sale_id        Int          @id @default(autoincrement())
+  transaction_id Int
+  shop_id        Int
+  subtotal       Decimal      @db.Decimal(12, 2)
+  created_at     DateTime     @default(now()) @db.Timestamp(0)
+  sale_items     sale_items[]
+  shops          shops        @relation(fields: [shop_id], references: [shop_id], onUpdate: Restrict, map: "fk_sales_shop")
+  transactions   transactions @relation(fields: [transaction_id], references: [transaction_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_sales_transaction")
+
+  @@index([shop_id], map: "fk_sales_shop")
+  @@index([transaction_id], map: "fk_sales_transaction")
+}
+
+model shops {
+  shop_id          Int                @id @default(autoincrement())
+  shop_name        String             @db.VarChar(100)
+  shop_code        String             @unique(map: "shop_code") @db.VarChar(10)
+  address          String?            @db.VarChar(255)
+  phone            String?            @db.VarChar(30)
+  is_active        Boolean            @default(true)
+  created_at       DateTime           @default(now()) @db.Timestamp(0)
+  updated_at       DateTime           @default(now()) @db.Timestamp(0)
+  categories       categories[]
+  products         products[]
+  purchase_batches purchase_batches[]
+  sales            sales[]
+  stock_movements  stock_movements[]
+  users            users[]
+}
+
+model stock_movements {
+  movement_id   Int                           @id @default(autoincrement())
+  shop_id       Int
+  product_id    Int
+  user_id       Int
+  quantity      Int
+  movement_type stock_movements_movement_type
+  reference     String?                       @db.VarChar(50)
+  created_at    DateTime                      @default(now()) @db.Timestamp(0)
+  products      products                      @relation(fields: [product_id], references: [product_id], onUpdate: Restrict, map: "fk_movements_product")
+  shops         shops                         @relation(fields: [shop_id], references: [shop_id], onUpdate: Restrict, map: "fk_movements_shop")
+  users         users                         @relation(fields: [user_id], references: [user_id], onUpdate: Restrict, map: "fk_movements_user")
+
+  @@index([product_id], map: "fk_movements_product")
+  @@index([shop_id], map: "fk_movements_shop")
+  @@index([user_id], map: "fk_movements_user")
+}
+
+model transactions {
+  transaction_id Int       @id @default(autoincrement())
+  cashier_id     Int
+  total_amount   Decimal   @db.Decimal(12, 2)
+  created_at     DateTime  @default(now()) @db.Timestamp(0)
+  payments       payments?
+  sales          sales[]
+  users          users     @relation(fields: [cashier_id], references: [user_id], onUpdate: Restrict, map: "fk_transactions_cashier")
+
+  @@index([cashier_id], map: "fk_transactions_cashier")
+}
+
+model users {
+  user_id               Int                @id @default(autoincrement())
+  name                  String             @db.VarChar(100)
+  email                 String             @unique(map: "email") @db.VarChar(150)
+  password_hash         String             @db.VarChar(255)
+  role                  users_role
+  shop_id               Int?
+  is_active             Boolean            @default(true)
+  created_at            DateTime           @default(now()) @db.Timestamp(0)
+  updated_at            DateTime           @default(now()) @db.Timestamp(0)
+  failed_login_attempts Int                @default(0)
+  locked_until          DateTime?          @db.Timestamp(0)
+  password_changed_at   DateTime           @default(now()) @db.Timestamp(0)
+  categories            categories[]
+  products              products[]
+  purchase_batches      purchase_batches[]
+  stock_movements       stock_movements[]
+  transactions          transactions[]
+  shops                 shops?             @relation(fields: [shop_id], references: [shop_id], onUpdate: Restrict, map: "fk_users_shop")
+
+  @@index([shop_id], map: "fk_users_shop")
+}
+
+enum payments_method {
+  cash
+  transfer
+  card
+  other
+}
+
+enum products_barcode_source {
+  generated
+  manufacturer
+}
+
+enum users_role {
+  owner
+  manager
+  cashier
+}
+
+enum stock_movements_movement_type {
+  STOCK_IN
+  SALE
+  ADJUSTMENT
+  RETURN
+}

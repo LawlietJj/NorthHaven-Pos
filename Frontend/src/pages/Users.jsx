@@ -1,0 +1,185 @@
+import { useEffect, useState } from "react";
+import { Pencil, UserX, UserCheck } from "lucide-react";
+import { listUsers, createUser, updateUser, deactivateUser, reactivateUser } from "../api/users";
+import LoadingScreen from "../components/LoadingScreen";
+
+function Users() {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const [editingId, setEditingId] = useState(null); // null = adding new
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "cashier" });
+
+  function refresh() {
+    listUsers().then(setUsers).finally(() => setLoading(false));
+  }
+
+  useEffect(refresh, []);
+
+  function handleChange(field, value) {
+    setForm((f) => ({ ...f, [field]: value }));
+  }
+
+  function startEdit(user) {
+    setEditingId(user.user_id);
+    setForm({ name: user.name, email: user.email, password: "", role: user.role });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setForm({ name: "", email: "", password: "", role: "cashier" });
+  }
+
+  async function handleSubmit() {
+    setError("");
+    setSaving(true);
+    try {
+      if (editingId) {
+        await updateUser(editingId, { name: form.name, email: form.email });
+      } else {
+        await createUser(form);
+      }
+      cancelEdit();
+      refresh();
+    } catch (err) {
+      setError(err.response?.data?.error || "Could not save user.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleActive(user) {
+    if (user.is_active) await deactivateUser(user.user_id);
+    else await reactivateUser(user.user_id);
+    refresh();
+  }
+
+  if (loading) return <LoadingScreen />;
+
+  return (
+    <div className="space-y-4">
+      {/* Add / Edit form */}
+      <div className="bg-surface rounded-xl p-5 shadow-sm space-y-4">
+        <p className="text-sm font-medium text-slate-900">
+          {editingId ? "Edit Staff Member" : "Add Staff Member"}
+        </p>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-xs text-text-secondary mb-1.5">Name *</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => handleChange("name", e.target.value)}
+              className="w-full h-10 px-3 rounded-lg border border-border text-sm outline-none focus:border-accent"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-text-secondary mb-1.5">Email *</label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => handleChange("email", e.target.value)}
+              className="w-full h-10 px-3 rounded-lg border border-border text-sm outline-none focus:border-accent"
+            />
+          </div>
+          {!editingId && (
+            <div>
+              <label className="block text-xs text-text-secondary mb-1.5">Password *</label>
+              <input
+                type="password"
+                value={form.password}
+                onChange={(e) => handleChange("password", e.target.value)}
+                className="w-full h-10 px-3 rounded-lg border border-border text-sm outline-none focus:border-accent"
+              />
+            </div>
+          )}
+          <div>
+            <label className="block text-xs text-text-secondary mb-1.5">Role *</label>
+            <select
+              value={form.role}
+              onChange={(e) => handleChange("role", e.target.value)}
+              disabled={!!editingId}
+              className="w-full h-10 px-3 rounded-lg border border-border text-sm outline-none disabled:bg-bg"
+            >
+              <option value="manager">Manager</option>
+              <option value="cashier">Cashier</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3">
+          {editingId && (
+            <button onClick={cancelEdit} className="px-4 py-2 rounded-lg border border-border text-sm">
+              Cancel
+            </button>
+          )}
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium disabled:opacity-60"
+          >
+            {saving ? "Saving…" : editingId ? "Update Staff" : "Add Staff"}
+          </button>
+        </div>
+      </div>
+
+      {/* Users table */}
+      <div className="bg-surface rounded-xl overflow-hidden shadow-sm">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-text-secondary border-b border-border">
+              <th className="px-5 py-3 font-medium">Name</th>
+              <th className="px-5 py-3 font-medium">Email</th>
+              <th className="px-5 py-3 font-medium">Role</th>
+              <th className="px-5 py-3 font-medium">Status</th>
+              <th className="px-5 py-3 font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.user_id} className="border-b border-border last:border-0">
+                <td className="px-5 py-3 text-slate-900">{u.name}</td>
+                <td className="px-5 py-3 text-text-secondary">{u.email}</td>
+                <td className="px-5 py-3 text-text-secondary capitalize">{u.role}</td>
+                <td className="px-5 py-3">
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                      u.is_active ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {u.is_active ? "Active" : "Deactivated"}
+                  </span>
+                </td>
+                <td className="px-5 py-3">
+                  <div className="flex items-center gap-3">
+                    {u.role !== "owner" && (
+                      <>
+                        <button onClick={() => startEdit(u)} className="text-text-secondary hover:text-accent">
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          onClick={() => toggleActive(u)}
+                          className="text-text-secondary hover:text-accent"
+                          title={u.is_active ? "Deactivate" : "Reactivate"}
+                        >
+                          {u.is_active ? <UserX size={16} /> : <UserCheck size={16} />}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export default Users;
