@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Pencil, UserX, UserCheck } from "lucide-react";
+import { Pencil, UserX, UserCheck, KeyRound } from "lucide-react";
 import { listUsers, createUser, updateUser, deactivateUser, reactivateUser } from "../api/users";
 import LoadingScreen from "../components/LoadingScreen";
+import ResetPasswordModal from "../components/ResetPasswordModal";
 import { useToast } from "../components/ToastProvider";
 
 const PAGE_SIZE = 10;
@@ -15,6 +16,7 @@ function Users() {
 
   const [editingId, setEditingId] = useState(null); // null = adding new
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "cashier" });
+  const [resettingUser, setResettingUser] = useState(null);
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -180,19 +182,24 @@ function Users() {
                 </td>
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setResettingUser(u)}
+                      className="text-text-secondary hover:text-accent"
+                      title="Reset Password"
+                    >
+                      <KeyRound size={16} />
+                    </button>
+                    <button onClick={() => startEdit(u)} className="text-text-secondary hover:text-accent">
+                      <Pencil size={16} />
+                    </button>
                     {u.role !== "owner" && (
-                      <>
-                        <button onClick={() => startEdit(u)} className="text-text-secondary hover:text-accent">
-                          <Pencil size={16} />
-                        </button>
-                        <button
-                          onClick={() => toggleActive(u)}
-                          className="text-text-secondary hover:text-accent"
-                          title={u.is_active ? "Deactivate" : "Reactivate"}
-                        >
-                          {u.is_active ? <UserX size={16} /> : <UserCheck size={16} />}
-                        </button>
-                      </>
+                      <button
+                        onClick={() => toggleActive(u)}
+                        className="text-text-secondary hover:text-accent"
+                        title={u.is_active ? "Deactivate" : "Reactivate"}
+                      >
+                        {u.is_active ? <UserX size={16} /> : <UserCheck size={16} />}
+                      </button>
                     )}
                   </div>
                 </td>
@@ -233,6 +240,18 @@ function Users() {
           </div>
         </div>
       </div>
+
+      {resettingUser && (
+        <ResetPasswordModal
+          userId={resettingUser.user_id}
+          userName={resettingUser.name}
+          onClose={() => setResettingUser(null)}
+          onSuccess={() => {
+            setResettingUser(null);
+            showToast("Password reset successfully.");
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -24,3 +24,11 @@ export async function reactivateUser(id) {
   const response = await apiClient.put(`/users/${id}/reactivate`);
   return response.data;
 }
+
+export async function resetPassword(userId, newPassword) {
+  const response = await apiClient.post("/auth/reset-password", {
+    user_id: userId,
+    new_password: newPassword,
+  });
+  return response.data;
+}
