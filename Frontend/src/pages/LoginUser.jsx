@@ -53,7 +53,7 @@ function LoginUser() {
       <section className="hidden lg:flex lg:w-[42%] min-h-screen bg-primary flex-col">
         <div className="flex-1 px-12 py-12 flex flex-col justify-center">
           <div className="max-w-md">
-            <img src={logo} alt="Exotic Collections logo" className="w-12 h-12 rounded-xl object-cover mb-6" />
+            <img src={logo} alt="Exotic Collections logo" className="w-12 h-12 rounded-full object-cover mb-6" />
             <p className="text-white text-2xl font-semibold tracking-tight">EXOTIC</p>
             <p className="text-slate-300 text-sm tracking-[0.25em] mt-1">COLLECTIONS</p>
             <div className="w-10 h-px bg-accent mt-8 mb-6" />
@@ -73,7 +73,7 @@ function LoginUser() {
       <main className="flex-1 min-h-screen bg-bg flex items-center justify-center px-6 py-12 sm:px-10 lg:px-12">
         <div className="w-full max-w-md">
           <div className="lg:hidden mb-10">
-            <img src={logo} alt="Exotic Collections logo" className="w-11 h-11 rounded-xl object-cover mb-4" />
+            <img src={logo} alt="Exotic Collections logo" className="w-11 h-11 rounded-full object-cover mb-4" />
             <p className="text-xl font-semibold text-primary">EXOTIC</p>
             <p className="text-xs tracking-[0.25em] text-slate-500 mt-1">COLLECTIONS</p>
           </div>
