@@ -2,9 +2,12 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { login } from "../api/auth";
+import logo from "../assets/logo.jpeg";
+import { useToast } from "../components/ToastProvider";
 
 function LoginUser() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,6 +20,7 @@ function LoginUser() {
 
     if (!email || !password) {
       setError("Enter your email and password.");
+      showToast("Enter your email and password.", "error");
       return;
     }
 
@@ -37,23 +41,22 @@ function LoginUser() {
     } catch (err) {
       const message = err.response?.data?.error || "Something went wrong. Try again.";
       setError(message);
+      showToast(message, "error");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
+    <div className="min-h-screen bg-surface flex">
       {/* LEFT PANEL */}
-      <section className="hidden lg:flex lg:w-[42%] min-h-screen bg-[#10213A] flex-col">
+      <section className="hidden lg:flex lg:w-[42%] min-h-screen bg-primary flex-col">
         <div className="flex-1 px-12 py-12 flex flex-col justify-center">
           <div className="max-w-md">
-            <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center mb-6">
-              <span className="text-white font-bold text-lg">EC</span>
-            </div>
+            <img src={logo} alt="Exotic Collections logo" className="w-12 h-12 rounded-xl object-cover mb-6" />
             <p className="text-white text-2xl font-semibold tracking-tight">EXOTIC</p>
             <p className="text-slate-300 text-sm tracking-[0.25em] mt-1">COLLECTIONS</p>
-            <div className="w-10 h-px bg-blue-400 mt-8 mb-6" />
+            <div className="w-10 h-px bg-accent mt-8 mb-6" />
             <h1 className="text-3xl xl:text-4xl font-semibold text-white leading-tight">
               Manage your business
               <br />
@@ -67,13 +70,11 @@ function LoginUser() {
       </section>
 
       {/* RIGHT PANEL */}
-      <main className="flex-1 min-h-screen bg-[#F5F7FA] flex items-center justify-center px-6 py-12 sm:px-10 lg:px-12">
+      <main className="flex-1 min-h-screen bg-bg flex items-center justify-center px-6 py-12 sm:px-10 lg:px-12">
         <div className="w-full max-w-md">
           <div className="lg:hidden mb-10">
-            <div className="w-11 h-11 rounded-xl bg-[#10213A] flex items-center justify-center mb-4">
-              <span className="text-white font-bold">EC</span>
-            </div>
-            <p className="text-xl font-semibold text-[#10213A]">EXOTIC</p>
+            <img src={logo} alt="Exotic Collections logo" className="w-11 h-11 rounded-xl object-cover mb-4" />
+            <p className="text-xl font-semibold text-primary">EXOTIC</p>
             <p className="text-xs tracking-[0.25em] text-slate-500 mt-1">COLLECTIONS</p>
           </div>
 
@@ -100,7 +101,7 @@ function LoginUser() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email or username"
                 autoComplete="username"
-                className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#1D4ED8] focus:ring-4 focus:ring-blue-100"
+                className="w-full h-12 px-4 rounded-xl border border-border bg-surface text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
               />
             </div>
 
@@ -116,7 +117,7 @@ function LoginUser() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   autoComplete="current-password"
-                  className="w-full h-12 px-4 pr-12 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#1D4ED8] focus:ring-4 focus:ring-blue-100"
+                  className="w-full h-12 px-4 pr-12 rounded-xl border border-border bg-surface text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
                 />
                 <button
                   type="button"
@@ -132,13 +133,13 @@ function LoginUser() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-12 rounded-xl bg-[#1D4ED8] hover:bg-blue-800 active:bg-blue-900 text-white text-sm font-semibold transition shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full h-12 rounded-xl bg-accent hover:bg-accent-strong text-white text-sm font-semibold transition shadow-sm focus:outline-none focus:ring-4 focus:ring-accent/15 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loading ? "Signing in…" : "Sign In"}
             </button>
           </form>
 
-          <div className="mt-10 pt-6 border-t border-slate-100">
+          <div className="mt-10 pt-6 border-t border-border">
             <p className="text-center text-xs text-slate-400">EXOTIC Collections POS</p>
             <p className="text-center text-[11px] text-slate-300 mt-1">Secure business management</p>
           </div>

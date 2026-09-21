@@ -4,6 +4,10 @@ import { listProducts } from "../api/products";
 import { lookupByBarcode, checkout, holdCart, getHeldCart, deleteHeldCart } from "../api/pos";
 import { getCurrentUser } from "../api/auth";
 import HeldCartsModal from "../components/HeldCartsModal";
+import { getReceipt } from "../api/pos";
+import ReceiptModal from "../components/RecieptModal";
+import { useToast } from "../components/ToastProvider";
+import MoneyInput from "../components/MoneyInput";
 
 function formatCurrency(amount) {
   return `₦${Number(amount).toLocaleString()}`;
@@ -17,7 +21,9 @@ const METHODS = [
 
 function POS() {
   const user = getCurrentUser();
+  const { showToast } = useToast();
   const inputRef = useRef(null);
+  const searchRequestRef = useRef(0);
 
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
@@ -30,10 +36,52 @@ function POS() {
   const [tendered, setTendered] = useState("");
   const [processing, setProcessing] = useState(false);
   const [heldModalOpen, setHeldModalOpen] = useState(false);
+  const [receipt, setReceipt] = useState(null);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+  
+  useEffect(() => {
+      function handleGlobalKeyDown(e) {
+        if (e.key === "Escape") {
+          inputRef.current?.focus();
+        }
+      }
+      document.addEventListener("keydown", handleGlobalKeyDown);
+      return () => document.removeEventListener("keydown", handleGlobalKeyDown);
+    }, []);
+
+  useEffect(() => {
+    const trimmedQuery = query.trim();
+    if (trimmedQuery.length < 2) {
+      setSuggestions([]);
+      setSearching(false);
+      return undefined;
+  }
+    const requestId = searchRequestRef.current + 1;
+    searchRequestRef.current = requestId;
+    const timeoutId = setTimeout(async () => {
+      setSearching(true);
+      setError("");
+      try {
+        const products = await listProducts({ search: trimmedQuery });
+        if (searchRequestRef.current === requestId) {
+          setSuggestions(products);
+          if (products.length === 0) setError("No product found matching that search.");
+        }
+      } catch (err) {
+        if (searchRequestRef.current === requestId) {
+          setSuggestions([]);
+          setError(err.response?.data?.error || "Could not search products.");
+        }
+      } finally {
+        if (searchRequestRef.current === requestId) setSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [query]);
 
   const subtotalByShop = cart.reduce((acc, item) => {
     acc[item.shop_code] = (acc[item.shop_code] || 0) + item.selling_price * item.quantity;
@@ -41,6 +89,16 @@ function POS() {
   }, {});
   const total = cart.reduce((sum, item) => sum + item.selling_price * item.quantity, 0);
   const change = Number(tendered) - total;
+
+  function notifyError(message) {
+    setError(message);
+    showToast(message, "error");
+  }
+
+  function notifySuccess(message) {
+    setNotice(message);
+    showToast(message);
+  }
 
   function addToCart(product) {
     setCart((prev) => {
@@ -80,10 +138,7 @@ function POS() {
       }
     } catch (err) {
       // Not a valid barcode — fall back to name search
-      const products = await listProducts();
-      const matches = products.filter((p) =>
-        p.name.toLowerCase().includes(query.trim().toLowerCase())
-      );
+      const matches = await listProducts({ search: query.trim() });
       if (matches.length === 0) {
         setError("No product found matching that barcode or name.");
       } else {
@@ -118,10 +173,10 @@ function POS() {
       await holdCart({
         items: cart.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
       });
-      setNotice("Order held.");
+      notifySuccess("Order held.");
       clearCart();
     } catch (err) {
-      setError(err.response?.data?.error || "Could not hold this order.");
+      notifyError(err.response?.data?.error || "Could not hold this order.");
     }
   }
 
@@ -148,9 +203,9 @@ function POS() {
 
   async function handleCompleteSale() {
     setError("");
-    if (cart.length === 0) return setError("Cart is empty.");
+    if (cart.length === 0) return notifyError("Cart is empty.");
     if (!tendered || Number(tendered) < total) {
-      return setError("Amount tendered must be at least the total.");
+      return notifyError("Amount tendered must be at least the total.");
     }
 
     setProcessing(true);
@@ -159,30 +214,24 @@ function POS() {
         items: cart.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
         payment: { method, amount_tendered: Number(tendered) },
       });
-      setNotice(`Sale complete — Transaction #${result.transaction_id}. Change: ${formatCurrency(result.payment.change_given)}`);
+     const fullReceipt = await getReceipt(result.transaction_id);
+      setReceipt(fullReceipt);
       clearCart();
     } catch (err) {
-      setError(err.response?.data?.error || "Could not complete sale.");
+      notifyError(err.response?.data?.error || "Could not complete sale.");
     } finally {
       setProcessing(false);
+    }
+  }
+  function handleTenderedKeyDown(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleCompleteSale();
     }
   }
 
   return (
     <div className="space-y-4">
-      {notice && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm flex justify-between">
-          <span>{notice}</span>
-          <button onClick={() => setNotice("")}><X size={16} /></button>
-        </div>
-      )}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm flex justify-between">
-          <span>{error}</span>
-          <button onClick={() => setError("")}><X size={16} /></button>
-        </div>
-      )}
-
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-slate-900">New Sale</h2>
         <button
@@ -194,7 +243,7 @@ function POS() {
       </div>
 
       {/* Scan/search bar */}
-      <form onSubmit={handleScanOrSearch} className="relative">
+      <form onSubmit={handleScanOrSearch} className="relative w-full max-w-2xl">
         <div className="flex items-center gap-2 bg-surface border border-border rounded-xl px-4 py-3 shadow-sm">
           {searching ? (
             <LoaderCircle size={16} className="loading-ring text-accent" aria-label="Searching" />
@@ -210,7 +259,7 @@ function POS() {
           />
         </div>
         {suggestions.length > 0 && (
-          <div className="absolute z-10 mt-1 w-full bg-surface border border-border rounded-xl shadow-lg overflow-hidden">
+          <div className="absolute z-10 mt-1 w-full max-h-72 overflow-y-auto bg-surface border border-border rounded-xl shadow-lg overflow-x-hidden">
             {suggestions.map((p) => (
               <button
                 key={p.product_id}
@@ -331,13 +380,13 @@ function POS() {
 
           <div>
             <label className="block text-xs text-text-secondary mb-1.5">Amount Tendered</label>
-            <input
-              type="number"
-              value={tendered}
-              onChange={(e) => setTendered(e.target.value)}
-              className="w-full h-11 px-3 rounded-lg border border-border text-lg outline-none focus:border-accent"
-              placeholder="0"
-            />
+            <MoneyInput
+                value={tendered}
+                onChange={setTendered}
+                onKeyDown={handleTenderedKeyDown}
+                className="w-full h-11 px-3 rounded-lg border border-border text-lg outline-none focus:border-accent"
+                placeholder="0"
+              />
           </div>
 
           <div className="flex justify-between text-sm">
@@ -362,6 +411,8 @@ function POS() {
         </div>
       </div>
 
+      {receipt && <ReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />}
+       
       {heldModalOpen && (
         <HeldCartsModal onClose={() => setHeldModalOpen(false)} onResume={handleResume} />
       )}

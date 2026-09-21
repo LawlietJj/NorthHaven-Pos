@@ -24,3 +24,8 @@ export async function generateBarcode(id) {
   const response = await apiClient.post(`/products/${id}/generate-barcode`);
   return response.data;
 }
+
+export async function deleteProduct(id) {
+  const response = await apiClient.delete(`/products/${id}`);
+  return response.data;
+}

@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { ArrowDownRight, ArrowUpRight, BarChart3, CalendarDays, CreditCard, Download, LayoutDashboard, Receipt, Store, TrendingUp } from "lucide-react";
+import * as XLSX from "xlsx";
 import { getCurrentUser } from "../api/auth";
-import {
-  getRevenueTrend,
-  getShopComparison,
-  getPaymentBreakdown,
-  getSalesLog,
-} from "../api/reports";
+import { getPaymentBreakdown, getProfitMargins, getRevenueTrend, getSalesLog, getShopComparison } from "../api/reports";
 import LoadingScreen from "../components/LoadingScreen";
+import RevenueChart from "../components/RevenueChart";
+import { useToast } from "../components/ToastProvider";
 
 function formatCurrency(amount) {
   return `₦${Number(amount).toLocaleString()}`;
@@ -23,31 +22,29 @@ const PAGE_SIZE = 8;
 
 function getRangeBounds(range) {
   const now = new Date();
-  let from;
-  if (range === "day") {
-    from = new Date(now);
-    from.setHours(0, 0, 0, 0);
-  } else if (range === "week") {
-    from = new Date(now);
-    from.setDate(from.getDate() - 6);
-    from.setHours(0, 0, 0, 0);
-  } else if (range === "month") {
-    from = new Date(now);
-    from.setDate(from.getDate() - 27);
-    from.setHours(0, 0, 0, 0);
-  } else {
-    from = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-  }
+  const from = new Date(now);
+  if (range === "day") from.setHours(0, 0, 0, 0);
+  if (range === "week") from.setDate(from.getDate() - 6);
+  if (range === "month") from.setDate(from.getDate() - 27);
+  if (range === "year") from.setMonth(from.getMonth() - 11, 1);
+  if (range !== "day") from.setHours(0, 0, 0, 0);
   const to = new Date(now);
   to.setHours(23, 59, 59, 999);
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
+function paymentMethod(transaction) {
+  const payment = Array.isArray(transaction.payments) ? transaction.payments[0] : transaction.payments;
+  return payment?.method || "—";
+}
+
 function Sales() {
+  const { showToast } = useToast();
   const user = getCurrentUser();
   const isOwner = user?.role === "owner";
   const canSeePaymentBreakdown = user?.role === "owner" || user?.role === "manager";
   const canSeeRevenueTrend = isOwner;
+  const [activeView, setActiveView] = useState(user?.role === "cashier" ? "log" : "dashboard");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -63,23 +60,27 @@ function Sales() {
   const [salesLog, setSalesLog] = useState(null);
   const [dateFilter, setDateFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [margins, setMargins] = useState(null);
 
-  // Initial load — sales log + shop comparison (Owner only). Payment
-  // breakdown is handled separately below since it's tied to `range`.
   useEffect(() => {
-    const calls = [getSalesLog()];
+    const calls = [getSalesLog({ page: 1, limit: PAGE_SIZE })];
     if (isOwner) calls.push(getShopComparison());
+    if (isOwner) calls.push(getProfitMargins());
 
     Promise.all(calls)
       .then((results) => {
         setSalesLog(results[0]);
-        if (isOwner) setShopComparison(results[1]);
+        let i = 1;
+        if (isOwner) setShopComparison(results[i++]);
+        if (isOwner) setMargins(results[i++]);
       })
-      .catch(() => setError("Could not load sales data. Try refreshing."))
+      .catch(() => {
+        setError("Could not load sales data. Try refreshing.");
+        showToast("Could not load sales data. Try refreshing.", "error");
+      })
       .finally(() => setLoading(false));
   }, []);
 
-  // Revenue Trend chart — Owner only, refetches on range change
   useEffect(() => {
     if (!canSeeRevenueTrend) {
       setTrendLoading(false);
@@ -89,7 +90,6 @@ function Sales() {
     getRevenueTrend(range).then(setTrend).finally(() => setTrendLoading(false));
   }, [range]);
 
-  // Payment Breakdown — Owner/Manager, tied to the SAME shared range
   useEffect(() => {
     if (!canSeePaymentBreakdown) {
       setPaymentLoading(false);
@@ -103,18 +103,40 @@ function Sales() {
   }, [range]);
 
   useEffect(() => {
-    getSalesLog(dateFilter ? { date: dateFilter } : {}).then(setSalesLog);
-    setPage(1);
-  }, [dateFilter]);
+    getSalesLog({ ...(dateFilter ? { date: dateFilter } : {}), page, limit: PAGE_SIZE }).then(setSalesLog);
+  }, [dateFilter, page]);
 
-  const maxRevenue = trend ? Math.max(...trend.buckets.map((b) => b.revenue), 1) : 1;
+  const transactions = salesLog?.transactions || [];
+  const totalRevenue = Number(salesLog?.total_revenue || 0);
+  const totalTransactions = Number(salesLog?.total_sales_count || transactions.length);
+  const averageSale = totalTransactions ? totalRevenue / totalTransactions : 0;
+  const trendChartData = trend
+    ? trend.buckets.map((b, i) => ({
+        label: b.label,
+        revenue: Number(b.revenue),
+        highlight: i === trend.buckets.length - 1,
+      }))
+    : [];
 
-  const paginatedTransactions = useMemo(() => {
-    if (!salesLog) return [];
-    return salesLog.transactions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  }, [salesLog, page]);
+  const totalPages = salesLog?.totalPages || 1;
 
-  const totalPages = salesLog ? Math.max(1, Math.ceil(salesLog.transactions.length / PAGE_SIZE)) : 1;
+  async function exportSalesLog() {
+    if (!totalTransactions) return;
+    // Export the FULL filtered log, not just the current page of results.
+    const full = await getSalesLog(dateFilter ? { date: dateFilter } : {});
+    const rows = full.transactions.map((transaction) => ({
+      "Transaction ID": transaction.transaction_id,
+      Date: new Date(transaction.created_at).toLocaleString(),
+      "Processed By": transaction.cashier_name,
+      Shops: transaction.sales.map((sale) => sale.shops.shop_code).join(", "),
+      "Payment Method": paymentMethod(transaction),
+      "Total Amount (₦)": Number(transaction.total_amount),
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Sales Log");
+    XLSX.writeFile(workbook, `sales-log-${dateFilter || new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
 
   if (loading) return <LoadingScreen label="Loading sales" />;
   if (error) {
@@ -125,118 +147,79 @@ function Sales() {
 
   return (
     <div className="space-y-6">
-      {/* Shared range filter — Owner/Manager only, drives chart + payment breakdown together */}
-      {canSeePaymentBreakdown && (
-        <div className="flex justify-end">
-          <div className="flex gap-1 bg-bg rounded-lg p-1">
-            {RANGES.map((r) => (
-              <button
-                key={r.key}
-                onClick={() => setRange(r.key)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
-                  range === r.key ? "bg-surface shadow-sm text-slate-900" : "text-text-secondary"
-                }`}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="flex justify-end">
+        <div className="flex gap-1 rounded-lg bg-bg p-1">{user?.role !== "cashier" && <button onClick={() => setActiveView("dashboard")} className={`flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium ${activeView === "dashboard" ? "bg-white text-primary shadow-sm" : "text-text-secondary hover:text-primary"}`}><LayoutDashboard size={15} /> Dashboard</button>}<button onClick={() => setActiveView("log")} className={`flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium ${activeView === "log" ? "bg-white text-primary shadow-sm" : "text-text-secondary hover:text-primary"}`}><Receipt size={15} /> Sales Log</button></div>
+      </div>
 
-      {/* Revenue Trend — Owner ONLY (duplicate of Manager Dashboard's chart otherwise) */}
+      {activeView === "dashboard" ? <>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {[{ label: "Total revenue", value: formatCurrency(totalRevenue), icon: TrendingUp, note: "All loaded sales" }, { label: "Transactions", value: totalTransactions.toLocaleString(), icon: Receipt, note: "Completed" }, { label: "Average sale", value: formatCurrency(averageSale), icon: BarChart3, note: "Per transaction" }].map((card) => <div key={card.label} className="rounded-xl border border-border bg-surface p-5 shadow-sm"><div className="mb-4 flex items-center justify-between"><span className="rounded-lg bg-orange-50 p-2 text-accent"><card.icon size={17} /></span><span className="text-xs text-text-muted">{card.note}</span></div><p className="text-xs font-medium uppercase tracking-wide text-text-secondary">{card.label}</p><p className="mt-1 text-2xl font-semibold text-primary">{card.value}</p></div>)}
+      </div>
+
       {canSeeRevenueTrend && (
         <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
-          <p className="text-sm font-medium text-slate-900 mb-6">Revenue Trend</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6"><div><p className="text-sm font-semibold text-primary">Revenue trend</p><p className="mt-1 text-xs text-text-muted">How revenue is moving over time</p></div><div className="flex gap-1 bg-bg rounded-lg p-1">{RANGES.map((r) => <button key={r.key} onClick={() => setRange(r.key)} className={`px-3 py-1.5 rounded-md text-xs font-medium ${range === r.key ? "bg-surface shadow-sm text-primary" : "text-text-secondary"}`}>{r.label}</button>)}</div></div>
           {trendLoading ? (
-            <p className="text-sm text-text-secondary h-40 flex items-center justify-center">Loading…</p>
+            <p className="text-sm text-text-secondary h-50 flex items-center justify-center">Loading…</p>
           ) : (
-            <div className="flex items-end justify-between gap-1 h-40 overflow-x-auto">
-              {trend.buckets.map((bucket, i) => (
-                <div key={i} className="flex-1 min-w-5 flex flex-col items-center gap-2">
-                  <div
-                    className="w-full rounded-t-md bg-accent/25"
-                    style={{ height: `${Math.max((bucket.revenue / maxRevenue) * 100, 4)}%` }}
-                    title={formatCurrency(bucket.revenue)}
-                  />
-                  <span className="text-[10px] text-text-secondary whitespace-nowrap">{bucket.label}</span>
-                </div>
-              ))}
-            </div>
+            <RevenueChart data={trendChartData} height={200} />
           )}
         </div>
       )}
 
-      {/* Shop Comparison (Owner only, all-time) + Payment Breakdown (Owner/Manager, filtered), side by side */}
-      {(isOwner || canSeePaymentBreakdown) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
+        <div className="space-y-4">
+          {canSeePaymentBreakdown && (
+            <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4"><p className="text-sm font-semibold text-primary">Payment methods ({RANGES.find((r) => r.key === range)?.label})</p><CreditCard size={17} className="text-accent" /></div>
+              {paymentLoading ? <p className="text-sm text-text-secondary">Loading...</p> : <div className="space-y-3">{paymentBreakdown?.by_method?.map((m) => <div key={m.method} className="flex items-center justify-between text-sm"><span className="text-text-secondary capitalize">{m.method}</span><span className="text-primary font-medium">{formatCurrency(m.total_amount)} <span className="text-text-muted font-normal">({m.count})</span></span></div>)}{(!paymentBreakdown || paymentBreakdown.by_method.length === 0) && <p className="text-sm text-text-muted">No payments recorded for this period.</p>}<div className="flex items-center justify-between text-sm pt-2 border-t border-border"><span className="text-primary font-medium">Total</span><span className="text-primary font-semibold">{formatCurrency(paymentBreakdown?.grand_total || 0)}</span></div></div>}
+            </div>
+          )}
           {isOwner && shopComparison && (
             <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
-              <p className="text-sm font-medium text-slate-900 mb-4">Shop Comparison (All-Time)</p>
-              <div className="space-y-3">
-                {shopComparison.shops.map((shop) => (
-                  <div key={shop.shop_id} className="flex items-center justify-between text-sm">
-                    <span className="text-slate-700">{shop.shop_code} — {shop.shop_name}</span>
-                    <span className="text-slate-900 font-medium">
-                      {formatCurrency(shop.total_revenue)}
-                      <span className="text-text-muted font-normal"> ({shop.total_sales_count})</span>
-                    </span>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between text-sm pt-2 border-t border-border">
-                  <span className="text-slate-900 font-medium">Combined</span>
-                  <span className="text-slate-900 font-semibold">{formatCurrency(shopComparison.combined.total_revenue)}</span>
-                </div>
+              <div className="flex items-center gap-2 mb-4"><Store size={17} className="text-accent" /><p className="text-sm font-semibold text-primary">Shop performance</p></div>
+              <div className="space-y-3">{shopComparison.shops.map((shop) => <div key={shop.shop_id} className="flex items-center justify-between text-sm"><span className="text-text-secondary">{shop.shop_code} — {shop.shop_name}</span><span className="text-primary font-medium">{formatCurrency(shop.total_revenue)}</span></div>)}<div className="flex items-center justify-between text-sm pt-2 border-t border-border"><span className="text-primary font-medium">Combined</span><span className="text-primary font-semibold">{formatCurrency(shopComparison.combined.total_revenue)}</span></div></div>
+            </div>
+          )}
+        </div>
+        <div className="space-y-4">
+          {isOwner && margins && (
+            <div className="bg-surface border border-border rounded-xl p-5 shadow-sm lg:row-span-2">
+              <p className="text-sm font-semibold text-primary mb-4">Margin products</p>
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-1">
+                <div><p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Highest margin</p><div className="space-y-2">{margins.highest_margin.map((p) => <div key={p.product_id} className="flex items-center justify-between gap-2 text-sm"><span className="truncate text-text-secondary">{p.name}</span><span className="font-medium text-emerald-600">{p.margin_percent.toFixed(0)}%</span></div>)}</div></div>
+                <div><p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-red-600">Lowest margin</p><div className="space-y-2">{margins.lowest_margin.map((p) => <div key={p.product_id} className="flex items-center justify-between gap-2 text-sm"><span className="truncate text-text-secondary">{p.name}</span><span className="font-medium text-red-600">{p.margin_percent.toFixed(0)}%</span></div>)}</div></div>
               </div>
             </div>
           )}
-
-          {canSeePaymentBreakdown && (
-            <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
-              <p className="text-sm font-medium text-slate-900 mb-4">
-                Payment Method Breakdown ({RANGES.find((r) => r.key === range)?.label})
-              </p>
-              {paymentLoading ? (
-                <p className="text-sm text-text-secondary">Loading…</p>
-              ) : (
-                <div className="space-y-3">
-                  {paymentBreakdown?.by_method.map((m) => (
-                    <div key={m.method} className="flex items-center justify-between text-sm">
-                      <span className="text-slate-700 capitalize">{m.method}</span>
-                      <span className="text-slate-900 font-medium">
-                        {formatCurrency(m.total_amount)}
-                        <span className="text-text-muted font-normal"> ({m.count})</span>
-                      </span>
-                    </div>
-                  ))}
-                  {(!paymentBreakdown || paymentBreakdown.by_method.length === 0) && (
-                    <p className="text-sm text-text-muted">No payments recorded for this period.</p>
-                  )}
-                  <div className="flex items-center justify-between text-sm pt-2 border-t border-border">
-                    <span className="text-slate-900 font-medium">Total</span>
-                    <span className="text-slate-900 font-semibold">
-                      {formatCurrency(paymentBreakdown?.grand_total || 0)}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
-      )}
+      </div>
 
-      {/* Full Sales Log — everyone, independent date filter (not tied to the range buttons above) */}
-      <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
+      </> : null}
+
+      {activeView === "log" && <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <p className="text-sm font-medium text-slate-900">Sales Log</p>
-          <input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="h-9 px-3 rounded-lg border border-border text-sm outline-none focus:border-accent"
-          />
+            <div><p className="text-base font-semibold text-primary">Sales log</p><p className="mt-1 text-xs text-text-muted">Review and export completed transactions.</p></div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-lg border border-border px-3"><CalendarDays size={15} className="text-text-muted" /><input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => {
+                setDateFilter(e.target.value);
+                setPage(1);
+              }}
+              className="h-9 bg-transparent text-xs outline-none"
+            /></div>
+            <button
+              onClick={exportSalesLog}
+              disabled={!totalTransactions}
+              className="flex items-center gap-2 h-9 px-3 rounded-lg bg-accent text-xs font-semibold text-white hover:bg-accent-strong disabled:opacity-40"
+            >
+              <Download size={14} /> Export
+            </button>
+          </div>
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full min-w-[700px] text-sm">
           <thead>
             <tr className="text-left text-text-secondary border-b border-border">
               <th className="px-5 py-3 font-medium">Transaction</th>
@@ -248,23 +231,21 @@ function Sales() {
             </tr>
           </thead>
           <tbody>
-            {paginatedTransactions.map((t) => (
+            {transactions.map((t) => (
               <tr key={t.transaction_id} className="border-b border-border last:border-0">
-                <td className="px-5 py-3 text-slate-900">#{t.transaction_id}</td>
+                <td className="px-5 py-3 font-semibold text-primary">#{t.transaction_id}</td>
                 <td className="px-5 py-3 text-text-secondary">{t.cashier_name}</td>
                 <td className="px-5 py-3 text-text-secondary">
                   {t.sales.map((s) => s.shops.shop_code).join(", ")}
                 </td>
-                <td className="px-5 py-3 text-text-secondary capitalize">
-                  {(Array.isArray(t.payments) ? t.payments[0]?.method : t.payments?.method) || "—"}
-                </td>
-                <td className="px-5 py-3 text-slate-900 font-medium">{formatCurrency(t.total_amount)}</td>
+                <td className="px-5 py-3 text-text-secondary capitalize">{paymentMethod(t)}</td>
+                <td className="px-5 py-3 text-right font-semibold text-primary">{formatCurrency(t.total_amount)}</td>
                 <td className="px-5 py-3 text-text-secondary">
                   {new Date(t.created_at).toLocaleString()}
                 </td>
               </tr>
             ))}
-            {paginatedTransactions.length === 0 && (
+            {transactions.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-5 py-8 text-center text-text-muted">
                   No sales found{dateFilter ? " for this date" : ""}.
@@ -272,7 +253,7 @@ function Sales() {
               </tr>
             )}
           </tbody>
-        </table>
+        </table></div>
 
         <div className="flex items-center justify-between px-5 py-3 border-t border-border">
           <p className="text-xs text-text-muted">
@@ -296,7 +277,7 @@ function Sales() {
             </button>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

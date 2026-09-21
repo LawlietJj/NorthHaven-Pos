@@ -1,17 +1,47 @@
 const prisma = require("../utils/prismaClient");
+const { logActivity } = require("../utils/activityLogger");
 
 
 async function listProducts(req, res, next) {
   try {
-    const { shop_id, category_id } = req.query;
+    const { shop_id, category_id, search, page, limit } = req.query;
 
-    const products = await prisma.products.findMany({
-      where: {
-        shop_id: shop_id ? Number(shop_id) : undefined,
-        category_id: category_id ? Number(category_id) : undefined,
-      },
-      orderBy: [{ shop_id: "asc" }, { name: "asc" }],
-    });
+    const where = {
+      shop_id: shop_id ? Number(shop_id) : undefined,
+      category_id: category_id ? Number(category_id) : undefined,
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search } },
+              { barcode: { contains: search } },
+            ],
+          }
+        : {}),
+    };
+    const orderBy = [{ shop_id: "asc" }, { name: "asc" }];
+
+    // Pagination is opt-in: only kicks in when page/limit is explicitly
+    // requested, so existing callers that want the full list (POS search,
+    // Stock's product dropdown) keep getting a plain array back.
+    const paginate = page !== undefined || limit !== undefined;
+
+    if (!paginate) {
+      const products = await prisma.products.findMany({ where, orderBy });
+      const sanitized =
+        req.user.role === "owner"
+          ? products
+          : products.map(({ cost_price, ...rest }) => rest);
+      return res.status(200).json(sanitized);
+    }
+
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 10;
+    const skip = (pageNum - 1) * limitNum;
+
+    const [products, total] = await Promise.all([
+      prisma.products.findMany({ where, orderBy, skip, take: limitNum }),
+      prisma.products.count({ where }),
+    ]);
 
     // cost_price is NEVER returned to a Manager — only Owner sees it.
     const sanitized =
@@ -19,7 +49,12 @@ async function listProducts(req, res, next) {
         ? products
         : products.map(({ cost_price, ...rest }) => rest);
 
-    return res.status(200).json(sanitized);
+    return res.status(200).json({
+      data: sanitized,
+      total,
+      page: pageNum,
+      totalPages: Math.max(1, Math.ceil(total / limitNum)),
+    });
   } catch (err) {
     next(err);
   }
@@ -96,6 +131,12 @@ async function updateProduct(req, res, next) {
       },
     });
 
+    await logActivity(
+      req.user.user_id,
+      "PRODUCT_UPDATED",
+      `${existing.name} (price: ₦${selling_price ?? existing.selling_price})`
+    );
+
     const { cost_price, ...safeProduct } = updated;
     return res.status(200).json(req.user.role === "owner" ? updated : safeProduct);
   } catch (err) {
@@ -169,4 +210,35 @@ async function getProductById(req, res, next) {
   }
 }
 
-module.exports = { listProducts, createProduct, updateProduct, generateBarcode, getProductById };
+async function deleteProduct(req, res, next) {
+  try {
+    const productId = Number(req.params.id);
+
+    const existing = await prisma.products.findUnique({ where: { product_id: productId } });
+    if (!existing) {
+      return res.status(404).json({ error: "Product not found." });
+    }
+
+    const [saleCount, movementCount, batchCount] = await Promise.all([
+      prisma.sale_items.count({ where: { product_id: productId } }),
+      prisma.stock_movements.count({ where: { product_id: productId } }),
+      prisma.purchase_batches.count({ where: { product_id: productId } }),
+    ]);
+
+    if (saleCount > 0 || movementCount > 0 || batchCount > 0) {
+      return res.status(409).json({
+        error: "Cannot delete — this product has sales or stock history. Consider adjusting its stock to 0 instead.",
+      });
+    }
+
+    await prisma.products.delete({ where: { product_id: productId } });
+
+    await logActivity(req.user.user_id, "PRODUCT_DELETED", existing.name);
+
+    return res.status(200).json({ message: "Product deleted." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { listProducts, createProduct, updateProduct, generateBarcode, getProductById, deleteProduct };

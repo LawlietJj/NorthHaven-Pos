@@ -86,9 +86,34 @@ async function ownerOverview(req, res, next) {
       });
     }
 
+    // Same weekday offsets, shifted back 7 more days, so index i lines up
+    // with the matching weekday in dailyRevenue for a week-over-week overlay.
+    const dailyRevenueLastWeek = [];
+    for (let i = 6; i >= 0; i--) {
+      const day = new Date(now);
+      day.setDate(day.getDate() - i - 7);
+      const dayStart = startOfDay(day);
+      const dayEnd = endOfDay(day);
+
+      const revenue = lastWeekSales
+        .filter((s) => new Date(s.created_at) >= dayStart && new Date(s.created_at) <= dayEnd)
+        .reduce((sum, s) => sum + Number(s.subtotal), 0);
+
+      dailyRevenueLastWeek.push({
+        label: day.toLocaleDateString("en-US", { weekday: "short" }),
+        date: dayStart.toISOString().slice(0, 10),
+        revenue,
+      });
+    }
+
     const products = await prisma.products.findMany();
     const retailValue = products.reduce((sum, p) => sum + Number(p.selling_price) * p.quantity, 0);
-    const costValue = products.reduce((sum, p) => sum + Number(p.cost_price || 0) * p.quantity, 0);
+    const stockValue = { retail_value: retailValue };
+    if (req.user.role === "owner") {
+      const costValue = products.reduce((sum, p) => sum + Number(p.cost_price || 0) * p.quantity, 0);
+      stockValue.cost_value = costValue;
+      stockValue.potential_profit = retailValue - costValue;
+    }
 
     const recentTransactions = await prisma.transactions.findMany({
       orderBy: { created_at: "desc" },
@@ -129,15 +154,13 @@ async function ownerOverview(req, res, next) {
         this_week_revenue: thisWeekRevenue,
         last_week_revenue: lastWeekRevenue,
         percent_change: percentChange,
+        daily_this_week: dailyRevenue,
+        daily_last_week: dailyRevenueLastWeek,
       },
       low_stock_count: lowStockCount,
       total_products: totalProducts,
       daily_revenue_last_7_days: dailyRevenue,
-      stock_value: {
-        retail_value: retailValue,
-        cost_value: costValue,
-        potential_profit: retailValue - costValue,
-      },
+      stock_value: stockValue,
       recent_activity: recentActivity,
       top_selling_products: topSelling,
     });
@@ -146,6 +169,25 @@ async function ownerOverview(req, res, next) {
   }
 }
 
+async function getActivityLog(req, res, next) {
+  try {
+    const logs = await prisma.activity_log.findMany({
+      orderBy: { created_at: "desc" },
+      take: 50,
+      include: { users: { select: { name: true, role: true } } },
+    });
 
+    return res.status(200).json(logs.map((log) => ({
+      log_id: log.log_id,
+      user_name: log.users.name,
+      user_role: log.users.role,
+      action: log.action,
+      details: log.details,
+      created_at: log.created_at,
+    })));
+  } catch (err) {
+    next(err);
+  }
+}
 
-module.exports = { ownerOverview, managerOverview: ownerOverview };
+module.exports = { ownerOverview, managerOverview: ownerOverview, getActivityLog };

@@ -1,5 +1,6 @@
 const express = require("express");
 const helmet = require("helmet");
+const { globalRateLimiter } = require("./middleware/rateLimiter");
 const cors = require("cors");
 
 const authRoutes = require("./routes/authRoutes");
@@ -12,6 +13,7 @@ const reportRoutes = require("./routes/reportRoutes");
 const userRoutes = require("./routes/userRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const heldCartRoutes = require("./routes/heldCartRoutes");
+const qzRoutes = require("./routes/qzRoutes");
 
 
 
@@ -38,6 +40,11 @@ app.use(
 
 app.use(express.json({ limit: "1mb" })); // limit prevents oversized payload abuse
 
+// Must be registered before the routes below — Express runs middleware in
+// registration order, and a matched route responds without calling next(),
+// so a limiter registered after the routes never runs for any real endpoint.
+app.use(globalRateLimiter);
+
 // --- Routes ---
 app.use("/auth", authRoutes);
 app.use("/shops", shopRoutes);
@@ -49,6 +56,8 @@ app.use("/reports", reportRoutes);
 app.use("/users", userRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/held-carts", heldCartRoutes);
+app.use("/qz", qzRoutes);
+
 
 app.use((err, req, res, next) => {
   console.error(err);

@@ -5,6 +5,7 @@ const { login, changePassword } = require("../controllers/authController");
 const { loginRateLimiter } = require("../middleware/rateLimiter");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/rbac");
+const { sensitiveActionRateLimiter } = require("../middleware/rateLimiter");
 
 const router = express.Router();
 
@@ -33,6 +34,7 @@ router.post(
 router.post(
   "/reset-password",
   requireAuth,
+  sensitiveActionRateLimiter,
   requireRole("owner"),
   [
     body("user_id").isInt().withMessage("A valid user_id is required."),

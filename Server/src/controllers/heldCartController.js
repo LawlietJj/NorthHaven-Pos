@@ -7,9 +7,9 @@ async function createHeldCart(req, res, next) {
       return res.status(400).json({ error: "Cannot hold an empty cart." });
     }
     const held = await prisma.held_carts.create({
-      data: { held_by: req.user.user_id, label: label || null, items },
+      data: { held_by: req.user.user_id, label: label || null, items: JSON.stringify(items) },
     });
-    return res.status(201).json(held);
+    return res.status(201).json({ ...held, items });
   } catch (err) {
     next(err);
   }
@@ -21,13 +21,22 @@ async function listHeldCarts(req, res, next) {
       orderBy: { created_at: "desc" },
       include: { users: { select: { name: true } } },
     });
-    const result = held.map((h) => ({
-      held_cart_id: h.held_cart_id,
-      label: h.label,
-      item_count: Array.isArray(h.items) ? h.items.length : 0,
-      held_by_name: h.users.name,
-      created_at: h.created_at,
-    }));
+    const result = held.map((h) => {
+      let itemCount = 0;
+      try {
+        const parsed = JSON.parse(h.items);
+        if (Array.isArray(parsed)) itemCount = parsed.length;
+      } catch {
+        // malformed/legacy row — report 0 rather than failing the whole list
+      }
+      return {
+        held_cart_id: h.held_cart_id,
+        label: h.label,
+        item_count: itemCount,
+        held_by_name: h.users.name,
+        created_at: h.created_at,
+      };
+    });
     return res.status(200).json(result);
   } catch (err) {
     next(err);
@@ -40,7 +49,7 @@ async function getHeldCart(req, res, next) {
       where: { held_cart_id: Number(req.params.id) },
     });
     if (!held) return res.status(404).json({ error: "Held cart not found." });
-    return res.status(200).json(held);
+    return res.status(200).json({ ...held, items: JSON.parse(held.items) });
   } catch (err) {
     next(err);
   }

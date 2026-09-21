@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { Store, UserX, UserCheck } from "lucide-react";
+import { MapPin, Phone, Store, UserCheck, UserX } from "lucide-react";
 import { listShops, updateShop, deactivateShop, reactivateShop } from "../api/shops";
 import LoadingScreen from "../components/LoadingScreen";
+import { useToast } from "../components/ToastProvider";
 
 function Shops() {
+  const { showToast } = useToast();
   const [shops, setShops] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
@@ -18,7 +20,9 @@ function Shops() {
       setShops(await listShops());
       setError("");
     } catch (err) {
-      setError(err.response?.data?.error || "Could not load shops.");
+      const message = err.response?.data?.error || "Could not load shops.";
+      setError(message);
+      showToast(message, "error");
     } finally {
       setLoading(false);
     }
@@ -45,28 +49,37 @@ function Shops() {
     try {
       await updateShop(shopId, form);
       setNotice("Shop updated.");
+      showToast("Shop updated.");
       setEditingId(null);
       refresh();
     } catch (err) {
-      setError(err.response?.data?.error || "Could not update shop.");
+      const message = err.response?.data?.error || "Could not update shop.";
+      setError(message);
+      showToast(message, "error");
     } finally {
       setSaving(false);
     }
   }
 
   async function toggleActive(shop) {
-    if (shop.is_active) await deactivateShop(shop.shop_id);
-    else await reactivateShop(shop.shop_id);
-    refresh();
+    try {
+      if (shop.is_active) await deactivateShop(shop.shop_id);
+      else await reactivateShop(shop.shop_id);
+      showToast(shop.is_active ? "Shop deactivated." : "Shop reactivated.");
+      refresh();
+    } catch (err) {
+      showToast(err.response?.data?.error || "Could not update shop status.", "error");
+    }
   }
 
   if (loading) return <LoadingScreen label="Loading shops" />;
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-text-secondary">
-        Shop codes are permanent once set (they're printed on barcodes and receipts) — only name, address, and phone can be edited.
-      </p>
+    <div className="space-y-5">
+      <div className="flex items-end justify-between border-b border-border pb-4">
+        <div><p className="text-xl font-semibold text-primary">Shops</p><p className="mt-1 text-sm text-text-secondary">Manage shop details and availability.</p></div>
+        <span className="text-xs text-text-muted">{shops.length} location(s)</span>
+      </div>
 
       {notice && <div className="rounded-xl border border-success/20 bg-success-soft px-4 py-3 text-sm text-success">{notice}</div>}
 
@@ -76,18 +89,18 @@ function Shops() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {shops.map((shop) => {
           const isEditing = editingId === shop.shop_id;
           return (
-            <div key={shop.shop_id} className="bg-surface rounded-xl p-5 shadow-sm space-y-4">
+            <div key={shop.shop_id} className="bg-surface border border-border rounded-xl p-5 shadow-sm space-y-5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="w-10 h-10 rounded-lg bg-blue-50 text-accent flex items-center justify-center">
+                  <span className="w-10 h-10 rounded-lg bg-orange-50 text-accent flex items-center justify-center">
                     <Store size={18} />
                   </span>
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">{shop.shop_code}</p>
+                    <p className="text-sm font-semibold text-primary">{shop.shop_code}</p>
                     <span
                       className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                         shop.is_active ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
@@ -152,12 +165,10 @@ function Shops() {
                 </div>
               ) : (
                 <div className="space-y-1.5">
-                  <p className="text-sm text-slate-900 font-medium">{shop.shop_name}</p>
-                  <p className="text-sm text-text-secondary">{shop.address || "No address set"}</p>
-                  <p className="text-sm text-text-secondary">{shop.phone || "No phone set"}</p>
-                  <button onClick={() => startEdit(shop)} className="text-sm text-accent hover:underline pt-1">
-                    Edit
-                  </button>
+                  <p className="text-base text-primary font-semibold">{shop.shop_name}</p>
+                  <p className="flex items-center gap-2 text-sm text-text-secondary"><MapPin size={14} className="text-accent" />{shop.address || "No address set"}</p>
+                  <p className="flex items-center gap-2 text-sm text-text-secondary"><Phone size={14} className="text-accent" />{shop.phone || "No phone set"}</p>
+                  <button onClick={() => startEdit(shop)} className="mt-2 rounded-lg border border-border px-3 py-1.5 text-sm text-primary hover:border-accent hover:text-accent">Edit details</button>
                 </div>
               )}
             </div>

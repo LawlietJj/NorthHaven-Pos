@@ -1,6 +1,7 @@
 const prisma = require('../utils/prismaClient');
 const { verifyPassword, hashPassword, validatePasswordStrength  } = require('../utils/password');
 const { signToken } = require("../utils/jwt");
+const { logActivity } = require("../utils/activityLogger");
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
@@ -48,6 +49,7 @@ async function login(req, res, next) {
         });
         
         const token = signToken(user);
+        await logActivity(user.user_id, "LOGIN");
         res.json({ token, user: { user_id: user.user_id, name: user.name, role: user.role } });  
 
     }
@@ -59,8 +61,8 @@ async function login(req, res, next) {
 
 async function changePassword(req, res, next) {
     try {
-        const { user_id, newPassword } = req.body;
-        const strengthError = validatePasswordStrength(newPassword);
+        const { user_id, new_password } = req.body;
+        const strengthError = validatePasswordStrength(new_password);
         if (strengthError) {
             return res.status(400).json({ error: strengthError });
         }
@@ -70,7 +72,7 @@ async function changePassword(req, res, next) {
             return res.status(404).json({ error: "User not found." });
         }
 
-        const newPasswordHash = await hashPassword(newPassword);
+        const newPasswordHash = await hashPassword(new_password);
 
         await prisma.users.update({
             where: {user_id: targetUser.user_id},

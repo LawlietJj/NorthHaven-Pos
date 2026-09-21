@@ -2,16 +2,16 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: rgb(16 33 58);
-  --color-accent: rgb(29 78 216);
-  --color-accent-strong: rgb(30 64 175);
+  --color-primary: #003399;
+  --color-accent: #FE914E;
+  --color-accent-strong: #e47738;
   --color-bg: rgb(248 250 252);
   --color-surface: rgb(255 255 255);
   --color-surface-muted: rgb(241 245 249);
   --color-border: rgb(226 232 240);
   --color-text-secondary: rgb(71 85 105);
   --color-text-muted: rgb(148 163 184);
-  --color-on-primary: rgb(255 255 255);
+  --color-on-primary: #ffffff;
   --color-on-accent: rgb(255 255 255);
   --color-success: rgb(4 120 87);
   --color-success-soft: rgb(236 253 245);
@@ -39,3 +39,76 @@ body,
   animation: loading-ring-spin 1.1s linear infinite;
 }
 
+.label-print-area {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .label-print-area,
+  .label-print-area * {
+    visibility: visible;
+  }
+  .label-print-area {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    page: label;
+  }
+  .label-page {
+    width: 50mm;
+    height: 40mm;
+    padding: 2mm;
+    text-align: center;
+  }
+
+  .receipt-print,
+  .receipt-print * {
+    visibility: visible;
+  }
+
+  .receipt-print {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 80mm;
+    padding: 5mm;
+    box-sizing: border-box;
+    font-size: 11pt;
+    line-height: 1.35;
+    page: receipt;
+  }
+  .receipt-print .text-xs {
+    font-size: 9pt;
+  }
+  .receipt-print .text-sm {
+    font-size: 11pt;
+  }
+  .label-name {
+    font-size: 8pt;
+    margin: 0 0 1mm;
+  }
+  .label-price {
+    font-size: 9pt;
+    font-weight: 600;
+    margin: 1mm 0 0;
+  }
+  @page {
+    size: 50mm 40mm;
+    margin: 0;
+  }
+
+  @page receipt {
+    size: 80mm auto;
+    margin: 0;
+  }
+
+  @page label {
+    size: 50mm 40mm;
+    margin: 0;
+  }
+}

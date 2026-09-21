@@ -35,6 +35,8 @@ model payments {
   change_given    Decimal         @default(0.00) @db.Decimal(12, 2)
   created_at      DateTime        @default(now()) @db.Timestamp(0)
   transactions    transactions    @relation(fields: [transaction_id], references: [transaction_id], onDelete: Cascade, onUpdate: Restrict, map: "fk_payments_transaction")
+
+  @@index([created_at])
 }
 
 model products {
@@ -63,6 +65,7 @@ model products {
   @@unique([shop_id, barcode], map: "uq_barcode_per_shop")
   @@index([category_id], map: "fk_products_category")
   @@index([created_by], map: "fk_products_created_by")
+  @@index([barcode])
 }
 
 model purchase_batches {
@@ -81,6 +84,7 @@ model purchase_batches {
   @@index([product_id], map: "fk_batches_product")
   @@index([recorded_by], map: "fk_batches_recorded_by")
   @@index([shop_id], map: "fk_batches_shop")
+  @@index([created_at])
 }
 
 model sale_items {
@@ -95,6 +99,7 @@ model sale_items {
 
   @@index([product_id], map: "fk_sale_items_product")
   @@index([sale_id], map: "fk_sale_items_sale")
+  @@index([created_at])
 }
 
 model sales {
@@ -109,6 +114,7 @@ model sales {
 
   @@index([shop_id], map: "fk_sales_shop")
   @@index([transaction_id], map: "fk_sales_transaction")
+  @@index([created_at])
 }
 
 model shops {
@@ -144,6 +150,7 @@ model stock_movements {
   @@index([product_id], map: "fk_movements_product")
   @@index([shop_id], map: "fk_movements_shop")
   @@index([user_id], map: "fk_movements_user")
+  @@index([created_at])
 }
 
 model transactions {
@@ -156,6 +163,7 @@ model transactions {
   users          users     @relation(fields: [cashier_id], references: [user_id], onUpdate: Restrict, map: "fk_transactions_cashier")
 
   @@index([cashier_id], map: "fk_transactions_cashier")
+  @@index([created_at])
 }
 
 model users {
@@ -171,7 +179,9 @@ model users {
   failed_login_attempts Int                @default(0)
   locked_until          DateTime?          @db.Timestamp(0)
   password_changed_at   DateTime           @default(now()) @db.Timestamp(0)
+  activity_log          activity_log[]
   categories            categories[]
+  held_carts            held_carts[]
   products              products[]
   purchase_batches      purchase_batches[]
   stock_movements       stock_movements[]
@@ -179,6 +189,28 @@ model users {
   shops                 shops?             @relation(fields: [shop_id], references: [shop_id], onUpdate: Restrict, map: "fk_users_shop")
 
   @@index([shop_id], map: "fk_users_shop")
+}
+
+model activity_log {
+  log_id     Int      @id @default(autoincrement())
+  user_id    Int
+  action     String   @db.VarChar(100)
+  details    String?  @db.VarChar(255)
+  created_at DateTime @default(now()) @db.Timestamp(0)
+  users      users    @relation(fields: [user_id], references: [user_id], onUpdate: Restrict, map: "fk_activity_log_user")
+
+  @@index([user_id], map: "fk_activity_log_user")
+}
+
+model held_carts {
+  held_cart_id Int      @id @default(autoincrement())
+  held_by      Int
+  label        String?  @db.VarChar(100)
+  items        String   @db.LongText
+  created_at   DateTime @default(now()) @db.Timestamp(0)
+  users        users    @relation(fields: [held_by], references: [user_id], onUpdate: Restrict, map: "fk_held_carts_user")
+
+  @@index([held_by], map: "fk_held_carts_user")
 }
 
 enum payments_method {

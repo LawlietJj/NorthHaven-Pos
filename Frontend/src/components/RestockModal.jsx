@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Modal from "./Modal";
+import MoneyInput from "./MoneyInput";
 import { createPurchaseBatch } from "../api/stock";
 
 function RestockModal({ productId, shopId, onClose, onSuccess }) {
@@ -37,10 +38,10 @@ function RestockModal({ productId, shopId, onClose, onSuccess }) {
         className="w-full h-10 px-3 mb-3 rounded-lg border border-border text-sm outline-none focus:border-accent"
       />
       <label className="block text-xs text-text-secondary mb-1.5">Total Cost Paid (₦)</label>
-      <input
-        type="number"
+      <MoneyInput
         value={totalCost}
-        onChange={(e) => setTotalCost(e.target.value)}
+        onChange={setTotalCost}
+        onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
         className="w-full h-10 px-3 mb-4 rounded-lg border border-border text-sm outline-none focus:border-accent"
       />
       <div className="flex justify-end gap-3">

@@ -34,19 +34,40 @@ async function createUser(req, res, next) {
 
 async function listUsers(req, res, next) {
   try {
-    const users = await prisma.users.findMany({
-      select: {
-        user_id: true,
-        name: true,
-        email: true,
-        role: true,
-        is_active: true,
-        created_at: true,
-      },
-      orderBy: { user_id: "asc" },
-    });
+    const { page, limit } = req.query;
+    const select = {
+      user_id: true,
+      name: true,
+      email: true,
+      role: true,
+      is_active: true,
+      created_at: true,
+    };
+    const orderBy = { user_id: "asc" };
 
-    return res.status(200).json(users);
+    // Pagination is opt-in — only applies when page/limit is explicitly requested.
+    const paginate = page !== undefined || limit !== undefined;
+
+    if (!paginate) {
+      const users = await prisma.users.findMany({ select, orderBy });
+      return res.status(200).json(users);
+    }
+
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 10;
+    const skip = (pageNum - 1) * limitNum;
+
+    const [users, total] = await Promise.all([
+      prisma.users.findMany({ select, orderBy, skip, take: limitNum }),
+      prisma.users.count(),
+    ]);
+
+    return res.status(200).json({
+      data: users,
+      total,
+      page: pageNum,
+      totalPages: Math.max(1, Math.ceil(total / limitNum)),
+    });
   } catch (err) {
     next(err);
   }

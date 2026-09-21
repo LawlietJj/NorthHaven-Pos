@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, Package } from "lucide-react";
+import { AlertTriangle, Package, TrendingUp } from "lucide-react";
 import { getManagerOverview } from "../api/dashboard";
 import { getLowStock, getRevenueTrend } from "../api/reports";
 import LoadingScreen from "../components/LoadingScreen";
+import { useToast } from "../components/ToastProvider";
 
 function formatCurrency(amount) {
   return `₦${Number(amount).toLocaleString()}`;
@@ -17,6 +18,7 @@ const RANGES = [
 
 function ManagerDashboard() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [data, setData] = useState(null);
   const [lowStockList, setLowStockList] = useState([]);
   const [error, setError] = useState("");
@@ -32,7 +34,10 @@ function ManagerDashboard() {
         setData(overview);
         setLowStockList(lowStock);
       })
-      .catch(() => setError("Could not load dashboard data. Try refreshing."))
+      .catch(() => {
+        setError("Could not load dashboard data. Try refreshing.");
+        showToast("Could not load dashboard data. Try refreshing.", "error");
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -53,10 +58,14 @@ function ManagerDashboard() {
   const maxRevenue = trend ? Math.max(...trend.buckets.map((b) => b.revenue), 1) : 1;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 pb-8">
+      <div className="flex items-end justify-between border-b border-border pb-4">
+        <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">Overview</p><h2 className="mt-1 text-2xl font-semibold tracking-tight text-primary">Manager dashboard</h2><p className="mt-1 text-sm text-text-secondary">Keep stock healthy and understand daily sales movement.</p></div>
+        <span className="hidden text-xs text-text-muted sm:block">Updated today</span>
+      </div>
       {/* Product-focused stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="bg-primary rounded-xl p-5 text-white">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="rounded-xl bg-primary p-5 text-white shadow-[0_10px_25px_rgba(0,51,153,0.16)]">
           <div className="flex items-center gap-2 mb-1">
             <Package size={16} className="text-white/70" />
             <p className="text-sm text-white/70">Total Products</p>
@@ -65,7 +74,7 @@ function ManagerDashboard() {
           <p className="text-xs text-white/60 mt-1">across both shops</p>
         </div>
 
-        <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
+        <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-1">
             <AlertTriangle size={16} className="text-amber-500" />
             <p className="text-sm text-text-secondary">Low Stock Alerts</p>
@@ -74,7 +83,7 @@ function ManagerDashboard() {
           <p className="text-xs text-text-muted mt-1">need restocking soon</p>
         </div>
 
-        <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
+        <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
           <p className="text-sm text-text-secondary mb-1">Stock Value (Retail)</p>
           <p className="text-2xl font-semibold text-slate-900">{formatCurrency(data.stock_value.retail_value)}</p>
           <p className="text-xs text-text-muted mt-1">what's on the shelves right now</p>
@@ -82,9 +91,9 @@ function ManagerDashboard() {
       </div>
 
       {/* Revenue chart */}
-      <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
+      <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
         <div className="flex items-center justify-between mb-6">
-          <p className="text-sm font-medium text-slate-900">Revenue</p>
+          <div><p className="text-sm font-semibold text-primary">Revenue overview</p><p className="mt-1 text-xs text-text-muted">Performance by selected period</p></div>
           <div className="flex gap-1 bg-bg rounded-lg p-1">
             {RANGES.map((r) => (
               <button
@@ -107,7 +116,7 @@ function ManagerDashboard() {
             {trend.buckets.map((bucket, i) => (
               <div key={i} className="flex-1 flex flex-col items-center gap-2">
                 <div
-                  className="w-full rounded-t-md bg-primary/25"
+                  className={`w-full rounded-t-md ${i === trend.buckets.length - 1 ? "bg-accent" : "bg-primary/20"}`}
                   style={{ height: `${Math.max((bucket.revenue / maxRevenue) * 100, 4)}%` }}
                   title={formatCurrency(bucket.revenue)}
                 />
@@ -118,14 +127,15 @@ function ManagerDashboard() {
         )}
       </div>
 
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
       {/* Low Stock table */}
-      <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
-        <div className="px-5 py-4 border-b border-border">
-          <p className="text-sm font-medium text-slate-900">Products Needing Restock</p>
+      <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+        <div className="border-b border-border px-5 py-4">
+          <p className="text-sm font-semibold text-primary">Products needing restock</p>
         </div>
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-text-secondary border-b border-border">
+            <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-text-muted">
               <th className="px-5 py-3 font-medium">Product</th>
               <th className="px-5 py-3 font-medium">Quantity Left</th>
               <th className="px-5 py-3 font-medium">Reorder Level</th>
@@ -133,8 +143,8 @@ function ManagerDashboard() {
           </thead>
           <tbody>
             {lowStockList.slice(0, 6).map((item) => (
-              <tr key={item.product_id} className="border-b border-border last:border-0">
-                <td className="px-5 py-3 text-slate-900">{item.name}</td>
+              <tr key={item.product_id} className="border-b border-border last:border-0 hover:bg-bg">
+                <td className="px-5 py-3 font-medium text-primary">{item.name}</td>
                 <td className="px-5 py-3 text-red-600 font-medium">{item.quantity}</td>
                 <td className="px-5 py-3 text-text-secondary">{item.low_stock_level}</td>
               </tr>
@@ -150,36 +160,26 @@ function ManagerDashboard() {
         </table>
       </div>
 
-      {/* Top Selling Products */}
-      <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
-        <p className="text-sm font-medium text-slate-900 mb-4">Top Selling Products</p>
-        <div className="space-y-3">
-          {data.top_selling_products.map((product, i) => (
-            <div key={product.product_id} className="flex items-center justify-between text-sm">
-              <span className="text-slate-700">
-                {i + 1}. {product.name}
-              </span>
-              <span className="text-text-secondary">{product.total_quantity_sold} sold</span>
-            </div>
-          ))}
-          {data.top_selling_products.length === 0 && (
-            <p className="text-sm text-text-muted">No sales recorded yet.</p>
-          )}
+      <div className="grid grid-cols-1 gap-4">
+        <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+          <div className="mb-4 flex items-center gap-2"><TrendingUp size={17} className="text-accent" /><p className="text-sm font-semibold text-primary">Top selling products</p></div>
+          <div className="space-y-3">{data.top_selling_products.map((product, i) => <div key={product.product_id} className="flex items-center justify-between text-sm"><span className="text-text-secondary">{i + 1}. {product.name}</span><span className="text-primary font-medium">{product.total_quantity_sold} sold</span></div>)}{data.top_selling_products.length === 0 && <p className="text-sm text-text-muted">No sales recorded yet.</p>}</div>
         </div>
+      </div>
       </div>
 
       {/* Quick shortcuts */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <button
           onClick={() => navigate("/products")}
-          className="bg-surface border border-border rounded-xl p-5 shadow-sm text-left hover:border-accent transition"
+          className="rounded-xl border border-border bg-surface p-5 text-left shadow-sm transition hover:border-accent hover:shadow-md"
         >
           <p className="text-sm font-medium text-slate-900">Manage Products</p>
           <p className="text-xs text-text-secondary mt-1">Add, edit, or restock products</p>
         </button>
         <button
           onClick={() => navigate("/categories")}
-          className="bg-surface border border-border rounded-xl p-5 shadow-sm text-left hover:border-accent transition"
+          className="rounded-xl border border-border bg-surface p-5 text-left shadow-sm transition hover:border-accent hover:shadow-md"
         >
           <p className="text-sm font-medium text-slate-900">Manage Categories</p>
           <p className="text-xs text-text-secondary mt-1">Organize products into groups</p>

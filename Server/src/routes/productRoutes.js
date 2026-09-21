@@ -1,7 +1,14 @@
 const express = require("express");
 const { body, validationResult } = require("express-validator");
 
-const { listProducts, createProduct, updateProduct, generateBarcode, getProductById } = require("../controllers/productController");
+const {
+  listProducts,
+  createProduct,
+  updateProduct,
+  generateBarcode,
+  getProductById,
+  deleteProduct,
+} = require("../controllers/productController");
 
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/rbac");
@@ -55,5 +62,7 @@ router.put(
 router.get("/:id", requireAuth, requireRole("owner", "manager", "cashier"), getProductById);
 
 router.post("/:id/generate-barcode", requireAuth, requireRole("owner", "manager"), generateBarcode);
+
+router.delete("/:id", requireAuth, requireRole("owner", "manager"), deleteProduct);
 
 module.exports = router;

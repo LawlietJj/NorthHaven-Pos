@@ -10,12 +10,15 @@ import ProductForm from "./pages/ProductForm";
 import Users from "./pages/Users";
 import Categories from "./pages/Categories";
 import Sales from "./pages/Sales";
+import Stock from "./pages/Stock";
 import ProtectedRoutes from "./components/protectedRoutes";
 import Shops from "./pages/shops";
+import ToastProvider from "./components/ToastProvider";
 
 function App() {
   return (
-    <div className="min-h-screen w-full overscroll-none">
+    <ToastProvider>
+      <div className="min-h-screen w-full overscroll-none">
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<LoginUser />} />
@@ -56,7 +59,7 @@ function App() {
           <Route
             path="/products"
             element={
-                <ProtectedRoutes allowedRoles={["owner"]}>
+                <ProtectedRoutes allowedRoles={["owner", "manager"]}>
                 <AppLayout title="Products">
                   <Products />
                 </AppLayout>
@@ -69,6 +72,16 @@ function App() {
               <ProtectedRoutes allowedRoles={["owner", "manager"]}>
                 <AppLayout title="Add Product">
                   <ProductForm mode="create" />
+                </AppLayout>
+              </ProtectedRoutes>
+            }
+          />
+          <Route
+            path="/stock"
+            element={
+              <ProtectedRoutes allowedRoles={["owner", "manager"]}>
+                <AppLayout title="Stock">
+                  <Stock />
                 </AppLayout>
               </ProtectedRoutes>
             }
@@ -130,7 +143,8 @@ function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-    </div>
+      </div>
+    </ToastProvider>
   );
 }
 

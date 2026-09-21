@@ -1,9 +1,11 @@
 const express = require("express");
 const { body, validationResult } = require("express-validator");
+const { checkoutRateLimiter } = require("../middleware/rateLimiter");
 
 const { lookupByBarcode, checkout, getTransactionReceipt } = require("../controllers/pointOfSalecontroller");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/rbac");
+
 
 const router = express.Router();
 
@@ -24,6 +26,7 @@ router.get(
 router.post(
   "/checkout",
   requireAuth,
+  checkoutRateLimiter,
   requireRole("owner", "manager", "cashier"),
   [
     body("items").isArray({ min: 1 }).withMessage("Cart must contain at least one item."),

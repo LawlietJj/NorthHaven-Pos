@@ -9,8 +9,12 @@ Server/node_modules/
 !.env.example
 Frontend/.env
 Frontend/.env.*
+!Frontend/.env.example
 Server/.env
 Server/.env.*
+!Server/.env.example
+Server/qz/private-key.pem
+Frontend/src/qz/private-key.pem
 
 # Build and generated output
 dist/

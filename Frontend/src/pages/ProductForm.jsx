@@ -8,6 +8,10 @@ import { getCurrentUser } from "../api/auth";
 import RestockModal from "../components/RestockModal";
 import AdjustStockModal from "../components/AdjustStockModal";
 import LoadingScreen from "../components/LoadingScreen";
+import PrintLabelModal from "../components/PrintLabelModal";
+import { uploadImage } from "../api/upload";
+import { useToast } from "../components/ToastProvider";
+import MoneyInput from "../components/MoneyInput";
 
 function getStatus(quantity, lowStockLevel) {
   if (quantity === 0) return { label: "Out of Stock", className: "bg-red-100 text-red-700" };
@@ -19,6 +23,7 @@ function ProductForm({ mode }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const user = getCurrentUser();
+  const { showToast } = useToast();
   const isOwner = user?.role === "owner";
   const isNew = mode === "create" || id === "new";
 
@@ -27,6 +32,10 @@ function ProductForm({ mode }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [printLabelOpen, setPrintLabelOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const [newProductId, setNewProductId] = useState(null);
 
   const [form, setForm] = useState({
     shop_id: "",
@@ -51,6 +60,7 @@ function ProductForm({ mode }) {
       if (!isNew) {
         if (!id || !Number.isInteger(Number(id))) {
           setError("This product link is invalid.");
+          showToast("This product link is invalid.", "error");
           setLoading(false);
           return;
         }
@@ -72,6 +82,7 @@ function ProductForm({ mode }) {
           })
           .catch(() => {
             setError("Could not load this product.");
+            showToast("Could not load this product.", "error");
             setLoading(false);
           });
       } else {
@@ -96,19 +107,22 @@ function ProductForm({ mode }) {
     setSaving(true);
     try {
       if (isNew) {
-          const created = await createProduct({
-            shop_id: Number(form.shop_id),
-            category_id: Number(form.category_id),
-            name: form.name,
-            selling_price: Number(form.selling_price),
-            low_stock_level: Number(form.low_stock_level) || 0,
-            barcode: form.barcode || null,
-            brand: form.brand || null,
-            image_url: form.image_url || null,
-          });
-          navigate(`/products/${created.product_id}`);
-        }else {
-          await updateProduct(id, {
+        const created = await createProduct({
+          shop_id: Number(form.shop_id),
+          category_id: Number(form.category_id),
+          name: form.name,
+          selling_price: Number(form.selling_price),
+          low_stock_level: Number(form.low_stock_level) || 0,
+          barcode: form.barcode || null,
+          brand: form.brand || null,
+          image_url: form.image_url || null,
+        });
+        setNewProductId(created.product_id);
+        const barcodeResult = await generateBarcode(created.product_id);
+        setForm((currentForm) => ({ ...currentForm, barcode: barcodeResult.barcode }));
+        setPrintLabelOpen(true);
+      } else {
+        await updateProduct(id, {
           name: form.name,
           category_id: Number(form.category_id),
           selling_price: Number(form.selling_price),
@@ -119,9 +133,25 @@ function ProductForm({ mode }) {
         navigate("/products");
       }
     } catch (err) {
-      setError(err.response?.data?.error || "Could not save product.");
+      showToast(err.response?.data?.error || "Could not save product.", "error");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleImageSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError("");
+    try {
+      const url = await uploadImage(file);
+      handleChange("image_url", url);
+    } catch (err) {
+      showToast("Could not upload image. Try again.", "error");
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -130,9 +160,17 @@ function ProductForm({ mode }) {
     setForm((f) => ({ ...f, barcode: result.barcode }));
   }
 
+  function handleNewLabelPrinted() {
+    setPrintLabelOpen(false);
+    if (isOwner) setRestockOpen(true);
+    else setAdjustOpen(true);
+  }
+
   if (loading) return <LoadingScreen />;
 
   const status = product ? getStatus(product.quantity, product.low_stock_level) : null;
+  const stockModalProductId = isNew ? newProductId : id;
+  const stockModalShopId = isNew ? Number(form.shop_id) : product?.shop_id;
 
   return (
     <div className="space-y-4">
@@ -143,26 +181,32 @@ function ProductForm({ mode }) {
         <ArrowLeft size={16} /> Back to Products
       </button>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{error}</div>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="bg-surface rounded-xl p-5 shadow-sm space-y-3">
-          <div className="w-full aspect-square rounded-xl bg-bg border border-border overflow-hidden flex items-center justify-center">
-            {form.image_url ? (
+          <div className="w-full aspect-square rounded-xl bg-bg border border-border overflow-hidden flex items-center justify-center relative">
+            {uploading ? (
+              <span className="text-text-muted text-sm">Uploading…</span>
+            ) : form.image_url ? (
               <img src={form.image_url} alt={form.name} className="w-full h-full object-cover" />
             ) : (
               <span className="text-text-muted text-sm">No image</span>
             )}
           </div>
-          <input
-            type="text"
-            placeholder="Image URL"
-            value={form.image_url}
-            onChange={(e) => handleChange("image_url", e.target.value)}
-            className="w-full h-10 px-3 rounded-lg border border-border text-sm outline-none focus:border-accent"
-          />
+          <label className="block">
+            <span className="sr-only">Upload product image</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              disabled={uploading}
+              className="w-full text-sm file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-bg file:text-slate-700 file:text-sm disabled:opacity-60"
+            />
+          </label>
+          {form.image_url && (
+            <button onClick={() => handleChange("image_url", "")} className="text-xs text-red-600 hover:underline">
+              Remove image
+            </button>
+          )}
         </div>
 
         <div className="lg:col-span-2 bg-surface rounded-xl p-5 shadow-sm space-y-4">
@@ -199,6 +243,14 @@ function ProductForm({ mode }) {
                   </button>
                 )}
               </div>
+              {!isNew && form.barcode && (
+                <button
+                  onClick={() => setPrintLabelOpen(true)}
+                  className="mt-2 text-sm font-medium text-accent hover:underline"
+                >
+                  Print Label
+                </button>
+              )}
             </div>
           </div>
 
@@ -259,10 +311,9 @@ function ProductForm({ mode }) {
             </div>
             <div>
               <label className="block text-xs text-text-secondary mb-1.5">Selling Price (₦) *</label>
-              <input
-                type="number"
+              <MoneyInput
                 value={form.selling_price}
-                onChange={(e) => handleChange("selling_price", e.target.value)}
+                onChange={(raw) => handleChange("selling_price", raw)}
                 className="w-full h-10 px-3 rounded-lg border border-border text-sm outline-none focus:border-accent"
               />
             </div>
@@ -283,6 +334,7 @@ function ProductForm({ mode }) {
                 type="number"
                 value={form.low_stock_level}
                 onChange={(e) => handleChange("low_stock_level", e.target.value)}
+                placeholder = "Minimum number of product avialable before restocking"
                 className="w-full h-10 px-3 rounded-lg border border-border text-sm outline-none focus:border-accent"
               />
             </div>
@@ -360,23 +412,51 @@ function ProductForm({ mode }) {
 
       {restockOpen && (
         <RestockModal
-          productId={id}
-          shopId={product.shop_id}
-          onClose={() => setRestockOpen(false)}
+          productId={stockModalProductId}
+          shopId={stockModalShopId}
+          onClose={() => {
+            setRestockOpen(false);
+            if (isNew && newProductId) navigate(`/products/${newProductId}`);
+          }}
           onSuccess={() => {
             setRestockOpen(false);
-            getProduct(id).then(setProduct);
+            if (isNew && newProductId) {
+              showToast("Product and opening stock recorded successfully.");
+              navigate(`/products/${newProductId}`);
+            } else {
+              getProduct(id).then(setProduct);
+            }
           }}
         />
       )}
+
+      {printLabelOpen && (
+        <PrintLabelModal
+          product={{ ...form, product_id: isNew ? newProductId : id, quantity: product?.quantity }}
+          onClose={() => {
+            setPrintLabelOpen(false);
+            if (isNew && newProductId) navigate(`/products/${newProductId}`);
+          }}
+          onPrinted={isNew ? handleNewLabelPrinted : undefined}
+        />
+      )}
+
       {adjustOpen && (
         <AdjustStockModal
-          productId={id}
-          shopId={product.shop_id}
-          onClose={() => setAdjustOpen(false)}
+          productId={stockModalProductId}
+          shopId={stockModalShopId}
+          onClose={() => {
+            setAdjustOpen(false);
+            if (isNew && newProductId) navigate(`/products/${newProductId}`);
+          }}
           onSuccess={() => {
             setAdjustOpen(false);
-            getProduct(id).then(setProduct);
+            if (isNew && newProductId) {
+              showToast("Product and opening stock recorded successfully.");
+              navigate(`/products/${newProductId}`);
+            } else {
+              getProduct(id).then(setProduct);
+            }
           }}
         />
       )}

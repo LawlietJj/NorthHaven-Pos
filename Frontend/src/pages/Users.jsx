@@ -2,8 +2,12 @@ import { useEffect, useState } from "react";
 import { Pencil, UserX, UserCheck } from "lucide-react";
 import { listUsers, createUser, updateUser, deactivateUser, reactivateUser } from "../api/users";
 import LoadingScreen from "../components/LoadingScreen";
+import { useToast } from "../components/ToastProvider";
+
+const PAGE_SIZE = 10;
 
 function Users() {
+  const { showToast } = useToast();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -12,11 +16,21 @@ function Users() {
   const [editingId, setEditingId] = useState(null); // null = adding new
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "cashier" });
 
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+
   function refresh() {
-    listUsers().then(setUsers).finally(() => setLoading(false));
+    listUsers({ page, limit: PAGE_SIZE })
+      .then((res) => {
+        setUsers(res.data);
+        setTotal(res.total);
+        setTotalPages(res.totalPages);
+      })
+      .finally(() => setLoading(false));
   }
 
-  useEffect(refresh, []);
+  useEffect(refresh, [page]);
 
   function handleChange(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -38,22 +52,31 @@ function Users() {
     try {
       if (editingId) {
         await updateUser(editingId, { name: form.name, email: form.email });
+        showToast("Staff member updated.");
       } else {
         await createUser(form);
+        showToast("Staff member added.");
       }
       cancelEdit();
       refresh();
     } catch (err) {
-      setError(err.response?.data?.error || "Could not save user.");
+      const message = err.response?.data?.error || "Could not save user.";
+      setError(message);
+      showToast(message, "error");
     } finally {
       setSaving(false);
     }
   }
 
   async function toggleActive(user) {
-    if (user.is_active) await deactivateUser(user.user_id);
-    else await reactivateUser(user.user_id);
-    refresh();
+    try {
+      if (user.is_active) await deactivateUser(user.user_id);
+      else await reactivateUser(user.user_id);
+      showToast(user.is_active ? "Staff member deactivated." : "Staff member reactivated.");
+      refresh();
+    } catch (err) {
+      showToast(err.response?.data?.error || "Could not update staff status.", "error");
+    }
   }
 
   if (loading) return <LoadingScreen />;
@@ -175,8 +198,40 @@ function Users() {
                 </td>
               </tr>
             ))}
+            {users.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-5 py-8 text-center text-text-muted">
+                  No staff members found.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
+
+        <div className="flex flex-col gap-3 border-t border-border px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-text-muted">
+            Showing {users.length ? (page - 1) * PAGE_SIZE + 1 : 0}–{Math.min(page * PAGE_SIZE, total)} of {total} staff members
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => p - 1)}
+              className="px-3 py-1.5 rounded-lg border border-border text-sm disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-slate-700">
+              {page} / {totalPages}
+            </span>
+            <button
+              disabled={page === totalPages}
+              onClick={() => setPage((p) => p + 1)}
+              className="px-3 py-1.5 rounded-lg border border-border text-sm disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

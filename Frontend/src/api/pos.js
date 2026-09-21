@@ -1,12 +1,12 @@
 import apiClient from "./apiClient";
 
 export async function lookupByBarcode(barcode) {
-  const response = await apiClient.get(`/products/by-barcode/${barcode}`);
+  const response = await apiClient.get(`/pos/products/by-barcode/${barcode}`);
   return response.data;
 }
 
 export async function checkout(data) {
-  const response = await apiClient.post("/checkout", data);
+  const response = await apiClient.post("/pos/checkout", data);
   return response.data;
 }
 
@@ -27,5 +27,10 @@ export async function getHeldCart(id) {
 
 export async function deleteHeldCart(id) {
   const response = await apiClient.delete(`/held-carts/${id}`);
+  return response.data;
+}
+
+export async function getReceipt(transactionId) {
+  const response = await apiClient.get(`/pos/transactions/${transactionId}`);
   return response.data;
 }

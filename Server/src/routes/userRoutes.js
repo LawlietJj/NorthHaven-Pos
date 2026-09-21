@@ -1,5 +1,6 @@
 const express = require("express");
 const { body, validationResult } = require("express-validator");
+const { sensitiveActionRateLimiter } = require("../middleware/rateLimiter");
 
 const { createUser, listUsers, updateUser, deactivateUser, reactivateUser  } = require("../controllers/userController");
 
@@ -19,6 +20,7 @@ function validate(req, res, next) {
 router.post(
   "/",
   requireAuth,
+  sensitiveActionRateLimiter,
   requireRole("owner"),
   [
     body("name").isString().notEmpty().withMessage("Name is required."),

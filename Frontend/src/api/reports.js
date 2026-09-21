@@ -34,3 +34,15 @@ export async function getRevenueTrend(range = "week") {
   const response = await apiClient.get("/reports/revenue-trend", { params: { range } });
   return response.data;
 }
+
+export async function getProfitMargins(shopId) {
+  const response = await apiClient.get("/reports/profit-margins", {
+    params: shopId ? { shop_id: shopId } : {},
+  });
+  return response.data;
+}
+
+export async function getNetProfit(range = "week") {
+  const response = await apiClient.get("/reports/net-profit", { params: { range } });
+  return response.data;
+}

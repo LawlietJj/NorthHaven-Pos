@@ -1,4 +1,5 @@
 const prisma = require("../utils/prismaClient");
+const { logActivity } = require("../utils/activityLogger");
 
 
 async function createPurchaseBatch(req, res, next) {
@@ -48,6 +49,8 @@ async function createPurchaseBatch(req, res, next) {
       return { batch, updatedProduct };
     });
 
+    await logActivity(req.user.user_id, "RESTOCK", `Product #${product_id}, qty ${quantity}, cost ₦${total_cost}`);
+
     return res.status(201).json({
       batch: result.batch,
       new_quantity: result.updatedProduct.quantity,
@@ -67,19 +70,44 @@ async function createPurchaseBatch(req, res, next) {
  * GET /purchase-batches — Owner ONLY.
  * This is where real cost history lives — 
  */
+function mapBatch(batch) {
+  return { ...batch, product_name: batch.products.name, products: undefined };
+}
+
 async function listPurchaseBatches(req, res, next) {
   try {
-    const { shop_id, product_id } = req.query;
+    const { shop_id, product_id, page, limit } = req.query;
 
-    const batches = await prisma.purchase_batches.findMany({
-      where: {
-        shop_id: shop_id ? Number(shop_id) : undefined,
-        product_id: product_id ? Number(product_id) : undefined,
-      },
-      orderBy: { created_at: "desc" },
+    const where = {
+      shop_id: shop_id ? Number(shop_id) : undefined,
+      product_id: product_id ? Number(product_id) : undefined,
+    };
+    const orderBy = { created_at: "desc" };
+    const include = { products: { select: { name: true } } };
+
+    // Pagination is opt-in — only applies when page/limit is explicitly requested.
+    const paginate = page !== undefined || limit !== undefined;
+
+    if (!paginate) {
+      const batches = await prisma.purchase_batches.findMany({ where, orderBy, include });
+      return res.status(200).json(batches.map(mapBatch));
+    }
+
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 10;
+    const skip = (pageNum - 1) * limitNum;
+
+    const [batches, total] = await Promise.all([
+      prisma.purchase_batches.findMany({ where, orderBy, include, skip, take: limitNum }),
+      prisma.purchase_batches.count({ where }),
+    ]);
+
+    return res.status(200).json({
+      data: batches.map(mapBatch),
+      total,
+      page: pageNum,
+      totalPages: Math.max(1, Math.ceil(total / limitNum)),
     });
-
-    return res.status(200).json(batches);
   } catch (err) {
     next(err);
   }
@@ -125,6 +153,12 @@ async function createStockAdjustment(req, res, next) {
       return { updatedProduct, movement };
     });
 
+    await logActivity(
+      req.user.user_id,
+      "STOCK_ADJUSTMENT",
+      `Product #${product_id}, change ${delta}, reason: ${reason || "none given"}`
+    );
+
     return res.status(201).json({
       new_quantity: result.updatedProduct.quantity,
       movement: result.movement,
@@ -134,19 +168,44 @@ async function createStockAdjustment(req, res, next) {
   }
 }
 
+function mapMovement(movement) {
+  return { ...movement, product_name: movement.products.name, products: undefined };
+}
+
 async function listStockMovements(req, res, next) {
   try {
-    const { shop_id, product_id } = req.query;
+    const { shop_id, product_id, page, limit } = req.query;
 
-    const movements = await prisma.stock_movements.findMany({
-      where: {
-        shop_id: shop_id ? Number(shop_id) : undefined,
-        product_id: product_id ? Number(product_id) : undefined,
-      },
-      orderBy: { created_at: "desc" },
+    const where = {
+      shop_id: shop_id ? Number(shop_id) : undefined,
+      product_id: product_id ? Number(product_id) : undefined,
+    };
+    const orderBy = { created_at: "desc" };
+    const include = { products: { select: { name: true } } };
+
+    // Pagination is opt-in — only applies when page/limit is explicitly requested.
+    const paginate = page !== undefined || limit !== undefined;
+
+    if (!paginate) {
+      const movements = await prisma.stock_movements.findMany({ where, orderBy, include });
+      return res.status(200).json(movements.map(mapMovement));
+    }
+
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 10;
+    const skip = (pageNum - 1) * limitNum;
+
+    const [movements, total] = await Promise.all([
+      prisma.stock_movements.findMany({ where, orderBy, include, skip, take: limitNum }),
+      prisma.stock_movements.count({ where }),
+    ]);
+
+    return res.status(200).json({
+      data: movements.map(mapMovement),
+      total,
+      page: pageNum,
+      totalPages: Math.max(1, Math.ceil(total / limitNum)),
     });
-
-    return res.status(200).json(movements);
   } catch (err) {
     next(err);
   }

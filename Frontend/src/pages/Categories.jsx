@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FolderTree, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { createCategory, deleteCategory, listCategories, updateCategory } from "../api/categories";
 import { getCurrentUser } from "../api/auth";
 import { listShops } from "../api/shops";
 import LoadingScreen from "../components/LoadingScreen";
+import { useToast } from "../components/ToastProvider";
 
 const emptyForm = { name: "", description: "", shop_id: "", parent_category_id: "" };
 
 function Categories() {
   const user = getCurrentUser();
   const isOwner = user?.role === "owner";
+  const { showToast } = useToast();
+  const searchInputRef = useRef(null);
 
   const [categories, setCategories] = useState([]);
   const [shops, setShops] = useState([]);
@@ -32,7 +35,9 @@ function Categories() {
       setCategories(categoryData);
       setShops(shopData);
     } catch (err) {
-      setError(err.response?.data?.error || "Could not load categories. Try refreshing.");
+      const message = err.response?.data?.error || "Could not load categories. Try refreshing.";
+      setError(message);
+      showToast(message, "error");
     } finally {
       setLoading(false);
     }
@@ -52,6 +57,20 @@ function Categories() {
     const timeoutId = window.setTimeout(() => setNotice(""), 10000);
     return () => window.clearTimeout(timeoutId);
   }, [notice]);
+
+  useEffect(() => {
+    searchInputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    function handleGlobalKeyDown(e) {
+      if (e.key === "Escape" && !formMode) {
+        searchInputRef.current?.focus();
+      }
+    }
+    document.addEventListener("keydown", handleGlobalKeyDown);
+    return () => document.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [formMode]);
 
   const shopById = useMemo(() => Object.fromEntries(shops.map((s) => [s.shop_id, s])), [shops]);
 
@@ -117,6 +136,7 @@ function Categories() {
           description: form.description.trim() || null,
         });
         setNotice("Category updated.");
+        showToast("Category updated.");
       } else {
         await createCategory({
           shop_id: Number(form.shop_id),
@@ -124,12 +144,14 @@ function Categories() {
           description: form.description.trim() || null,
           parent_category_id: formMode === "sub" ? Number(form.parent_category_id) : null,
         });
-        setNotice(formMode === "parent" ? "Parent category created." : "Subcategory created.");
+        const message = formMode === "parent" ? "Parent category created." : "Subcategory created.";
+        setNotice(message);
+        showToast(message);
       }
       setFormMode(null);
       await refresh();
     } catch (err) {
-      setError(err.response?.data?.error || "Could not save category.");
+      showToast(err.response?.data?.error || "Could not save category.", "error");
     } finally {
       setSaving(false);
     }
@@ -142,9 +164,10 @@ function Categories() {
     try {
       await deleteCategory(category.category_id);
       setNotice("Category deleted.");
+      showToast("Category deleted.");
       await refresh();
     } catch (err) {
-      setError(err.response?.data?.error || "Could not delete category.");
+      showToast(err.response?.data?.error || "Could not delete category.", "error");
     }
   }
 
@@ -187,12 +210,11 @@ function Categories() {
           <button onClick={() => setError("")} aria-label="Dismiss error"><X size={16} /></button>
         </div>
       )}
-      {notice && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</div>}
-
       <div className="flex flex-wrap items-center gap-3 rounded-xl bg-surface p-3 shadow-md">
         <div className="relative min-w-52 flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
           <input
+            ref={searchInputRef}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search categories..."

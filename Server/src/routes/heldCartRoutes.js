@@ -19,7 +19,11 @@ router.post(
   "/",
   requireAuth,
   allRoles,
-  [body("items").isArray({ min: 1 }).withMessage("Cannot hold an empty cart.")],
+  [
+    body("items").isArray({ min: 1 }).withMessage("Cannot hold an empty cart."),
+    body("items.*.product_id").isInt().withMessage("Each item needs a valid product_id."),
+    body("items.*.quantity").isInt({ min: 1 }).withMessage("Each item needs a quantity of at least 1."),
+  ],
   validate,
   createHeldCart
 );
