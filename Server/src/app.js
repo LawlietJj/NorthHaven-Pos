@@ -22,6 +22,12 @@ const { products } = require("./utils/prismaClient");
 
 const app = express();
 
+// Hostinger (and most hosts) run the app behind their own reverse proxy,
+// which sets X-Forwarded-For. Trusting exactly one hop (the proxy directly
+// in front of us, not a whole chain) lets express-rate-limit correctly key
+// limits per real client IP instead of the proxy's IP for every request.
+app.set("trust proxy", 1);
+
 // --- Security middleware (applied globally, before any routes) ---
 
 // Helmet sets a range of protective HTTP headers in one line:
