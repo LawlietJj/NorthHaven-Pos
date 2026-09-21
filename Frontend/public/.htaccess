@@ -1,0 +1,13 @@
+# Exotic Collections is a single-page React app (BrowserRouter). Any URL
+# that isn't an actual file on disk (e.g. /login, /products/5) must still
+# serve index.html so React Router can render the matching route client-side
+# — without this, a hard navigation or page refresh on any non-root path
+# gets a real 404 from the server before React ever loads.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
