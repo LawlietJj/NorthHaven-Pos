@@ -6,6 +6,14 @@ const qzDirectory = path.resolve(__dirname, "../../qz");
 const certificatePath = path.join(qzDirectory, "digital-certificate.txt");
 const privateKeyPath = path.join(qzDirectory, "private-key.pem");
 
+// Prefer QZ_PRIVATE_KEY from the environment (production); fall back to the local file (development).
+function getPrivateKey() {
+  const envKey = process.env.QZ_PRIVATE_KEY;
+  if (envKey && envKey.trim()) return envKey.replace(/\\n/g, "\n");
+  if (fs.existsSync(privateKeyPath)) return fs.readFileSync(privateKeyPath, "utf8");
+  return null;
+}
+
 function getSigningRequest(req) {
   if (typeof req.body === "string") return req.body;
   if (req.body && typeof req.body.request === "string") return req.body.request;
@@ -28,7 +36,11 @@ function signRequest(req, res, next) {
       return res.status(400).json({ error: "A QZ signing request is required." });
     }
 
-    const privateKey = fs.readFileSync(privateKeyPath, "utf8");
+    const privateKey = getPrivateKey();
+    if (!privateKey) {
+      console.error("QZ signing failed: set QZ_PRIVATE_KEY or provide qz/private-key.pem");
+      return res.status(500).json({ error: "QZ signing key is not configured on the server." });
+    }
     const signer = crypto.createSign("SHA512");
     signer.update(request);
     signer.end();
