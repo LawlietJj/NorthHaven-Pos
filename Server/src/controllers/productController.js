@@ -10,20 +10,13 @@ async function listProducts(req, res, next) {
     // params with a collation that clashes with the columns (error 1267) when
     // Prisma's `contains` is used.
     let searchIds;
-    // TEMP timing log to find the slow step in search — remove once diagnosed.
-    const timing = search ? { t0: Date.now() } : null;
     if (search) {
-      await prisma.$queryRaw`SELECT 1`;
-      timing.ping = Date.now() - timing.t0;
-
       const pattern = `%${String(search).replace(/[\\%_]/g, "\\$&")}%`;
-      const t1 = Date.now();
       const rows = await prisma.$queryRaw`
         SELECT product_id FROM products
         WHERE name LIKE CONVERT(${pattern} USING utf8mb4) COLLATE utf8mb4_general_ci
            OR barcode LIKE CONVERT(${pattern} USING utf8mb4) COLLATE utf8mb4_general_ci`;
       searchIds = rows.map((r) => r.product_id);
-      timing.searchQuery = Date.now() - t1;
     }
 
     const where = {
@@ -39,18 +32,11 @@ async function listProducts(req, res, next) {
     const paginate = page !== undefined || limit !== undefined;
 
     if (!paginate) {
-      const t2 = Date.now();
       const products = await prisma.products.findMany({ where, orderBy });
       const sanitized =
         req.user.role === "owner"
           ? products
           : products.map(({ cost_price, ...rest }) => rest);
-      if (timing) {
-        console.log(
-          `[search-timing] "${search}" ping=${timing.ping}ms searchQuery=${timing.searchQuery}ms ` +
-            `findMany=${Date.now() - t2}ms matches=${searchIds.length} controllerTotal=${Date.now() - timing.t0}ms`
-        );
-      }
       return res.status(200).json(sanitized);
     }
 
