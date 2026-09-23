@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, BarChart3, CalendarDays, CreditCard, Download, LayoutDashboard, Receipt, Store, TrendingUp } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, BarChart3, CalendarDays, CreditCard, Download, LayoutDashboard, LoaderCircle, Printer, Receipt, Store, TrendingUp } from "lucide-react";
 import * as XLSX from "xlsx";
 import { getCurrentUser } from "../api/auth";
+import { getReceipt } from "../api/pos";
 import { getPaymentBreakdown, getProfitMargins, getRevenueTrend, getSalesLog, getShopComparison } from "../api/reports";
 import LoadingScreen from "../components/LoadingScreen";
+import ReceiptModal from "../components/RecieptModal";
 import RevenueChart from "../components/RevenueChart";
 import { useToast } from "../components/ToastProvider";
 
@@ -61,6 +63,20 @@ function Sales() {
   const [dateFilter, setDateFilter] = useState("");
   const [page, setPage] = useState(1);
   const [margins, setMargins] = useState(null);
+  const [receipt, setReceipt] = useState(null);
+  const [loadingReceiptId, setLoadingReceiptId] = useState(null);
+
+  async function openReceipt(transactionId) {
+    if (loadingReceiptId) return;
+    setLoadingReceiptId(transactionId);
+    try {
+      setReceipt(await getReceipt(transactionId));
+    } catch (err) {
+      showToast(err.response?.data?.error || "Could not load this receipt.", "error");
+    } finally {
+      setLoadingReceiptId(null);
+    }
+  }
 
   useEffect(() => {
     const calls = [getSalesLog({ page: 1, limit: PAGE_SIZE })];
@@ -228,6 +244,7 @@ function Sales() {
               <th className="px-5 py-3 font-medium">Payment</th>
               <th className="px-5 py-3 font-medium">Total</th>
               <th className="px-5 py-3 font-medium">Date</th>
+              <th className="px-5 py-3 font-medium text-right">Receipt</th>
             </tr>
           </thead>
           <tbody>
@@ -243,11 +260,27 @@ function Sales() {
                 <td className="px-5 py-3 text-text-secondary">
                   {new Date(t.created_at).toLocaleString()}
                 </td>
+                <td className="px-5 py-3 text-right">
+                  <button
+                    type="button"
+                    onClick={() => openReceipt(t.transaction_id)}
+                    disabled={loadingReceiptId !== null}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-xs text-primary hover:bg-bg disabled:opacity-50"
+                    aria-label={`View and print receipt for transaction ${t.transaction_id}`}
+                  >
+                    {loadingReceiptId === t.transaction_id ? (
+                      <LoaderCircle size={14} className="loading-ring" />
+                    ) : (
+                      <Printer size={14} />
+                    )}
+                    Receipt
+                  </button>
+                </td>
               </tr>
             ))}
             {transactions.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-5 py-8 text-center text-text-muted">
+                <td colSpan={7}className="px-5 py-8 text-center text-text-muted">
                   No sales found{dateFilter ? " for this date" : ""}.
                 </td>
               </tr>
@@ -278,6 +311,8 @@ function Sales() {
           </div>
         </div>
       </div>}
+
+      {receipt && <ReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />}
     </div>
   );
 }
