@@ -34,6 +34,7 @@ function POS() {
 
   const [method, setMethod] = useState("cash");
   const [tendered, setTendered] = useState("");
+  const [discount, setDiscount] = useState("");
   const [processing, setProcessing] = useState(false);
   const [heldModalOpen, setHeldModalOpen] = useState(false);
   const [receipt, setReceipt] = useState(null);
@@ -87,7 +88,11 @@ function POS() {
     acc[item.shop_code] = (acc[item.shop_code] || 0) + item.selling_price * item.quantity;
     return acc;
   }, {});
-  const total = cart.reduce((sum, item) => sum + item.selling_price * item.quantity, 0);
+  const subtotal = cart.reduce((sum, item) => sum + item.selling_price * item.quantity, 0);
+  // A fixed amount typed at the till (not a percentage), off the whole sale.
+  const discountAmount = Number(discount) || 0;
+  const discountTooLarge = discountAmount > subtotal;
+  const total = Math.max(0, subtotal - discountAmount);
   const change = Number(tendered) - total;
 
   function notifyError(message) {
@@ -164,6 +169,7 @@ function POS() {
   function clearCart() {
     setCart([]);
     setTendered("");
+    setDiscount("");
     setError("");
   }
 
@@ -204,6 +210,7 @@ function POS() {
   async function handleCompleteSale() {
     setError("");
     if (cart.length === 0) return notifyError("Cart is empty.");
+    if (discountTooLarge) return notifyError("Discount cannot be more than the sale total.");
     if (!tendered || Number(tendered) < total) {
       return notifyError("Amount tendered must be at least the total.");
     }
@@ -213,6 +220,7 @@ function POS() {
       const result = await checkout({
         items: cart.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
         payment: { method, amount_tendered: Number(tendered) },
+        discount_amount: discountAmount,
       });
      const fullReceipt = await getReceipt(result.transaction_id);
       setReceipt(fullReceipt);
@@ -353,6 +361,18 @@ function POS() {
 
         {/* Payment panel */}
         <div className="bg-surface border border-border rounded-xl p-5 shadow-sm space-y-4">
+          {discountAmount > 0 && (
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between text-text-secondary">
+                <span>Subtotal</span>
+                <span>{formatCurrency(subtotal)}</span>
+              </div>
+              <div className="flex justify-between text-text-secondary">
+                <span>Discount</span>
+                <span>-{formatCurrency(discountAmount)}</span>
+              </div>
+            </div>
+          )}
           <div className="flex items-baseline justify-between">
             <span className="text-sm font-medium text-slate-900">Total</span>
             <span className="text-2xl font-semibold text-slate-900">{formatCurrency(total)}</span>
@@ -387,6 +407,21 @@ function POS() {
                 className="w-full h-11 px-3 rounded-lg border border-border text-lg outline-none focus:border-accent"
                 placeholder="0"
               />
+          </div>
+
+          <div>
+            <label className="block text-xs text-text-secondary mb-1.5">Discount (₦, optional)</label>
+            <MoneyInput
+              value={discount}
+              onChange={setDiscount}
+              className={`w-full h-11 px-3 rounded-lg border text-lg outline-none focus:border-accent ${
+                discountTooLarge ? "border-red-400" : "border-border"
+              }`}
+              placeholder="0"
+            />
+            {discountTooLarge && (
+              <p className="mt-1 text-xs text-red-600">Discount cannot be more than the sale total.</p>
+            )}
           </div>
 
           <div className="flex justify-between text-sm">

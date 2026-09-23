@@ -413,6 +413,17 @@ async function netProfit(req, res, next) {
       },
     });
 
+    // price_at_sale is the full shelf price; discounts given at the till are
+    // recorded per sale and come straight off revenue.
+    const discountAgg = await prisma.sales.aggregate({
+      where: {
+        created_at: { gte: start, lte: end },
+        ...(shop_id ? { shop_id: Number(shop_id) } : {}),
+      },
+      _sum: { discount_amount: true },
+    });
+    const discounts = Number(discountAgg._sum.discount_amount || 0);
+
     let revenue = 0;
     let costOfGoodsSold = 0;
     let excludedQuantity = 0;
@@ -425,11 +436,13 @@ async function netProfit(req, res, next) {
       revenue += Number(item.price_at_sale) * item.quantity;
       costOfGoodsSold += Number(item.products.cost_price) * item.quantity;
     }
+    revenue -= discounts;
 
     return res.status(200).json({
       range,
       period: { from: start, to: end },
       revenue,
+      discounts,
       cost_of_goods_sold: costOfGoodsSold,
       net_profit: revenue - costOfGoodsSold,
       excluded_quantity: excludedQuantity,

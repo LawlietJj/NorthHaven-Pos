@@ -34,6 +34,7 @@ router.post(
     body("items.*.quantity").isInt({ min: 1 }).withMessage("Each item needs a quantity of at least 1."),
     body("payment.method").isString().notEmpty().withMessage("Payment method is required."),
     body("payment.amount_tendered").isFloat({ min: 0 }).withMessage("A valid amount_tendered is required."),
+    body("discount_amount").optional().isFloat({ min: 0 }).withMessage("Discount must be 0 or more."),
   ],
   validate,
   checkout

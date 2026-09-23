@@ -1,16 +1,13 @@
 import { useState } from "react";
 import Barcode from "react-barcode";
 import { Printer, X } from "lucide-react";
-import {
-  LABEL_OFFSET_LIMIT,
-  PrinterNotSelectedError,
-  getLabelOffset,
-  getSavedPrinter,
-  printBarcodeLabels,
-  saveLabelOffset,
-} from "../utils/qzPrinter";
+import { PrinterNotSelectedError, getSavedPrinter, printBarcodeLabels } from "../utils/qzPrinter";
 import { useModalKeyboard } from "../utils/useModalKeyboard";
 import PrinterPicker from "./PrinterPicker";
+
+// The XP-365B prints labels off-centre; shifting content 3mm right centres
+// it on the 51mm sticker (measured on the shop's printer).
+const LABEL_OFFSET_MM = 3;
 
 function formatCurrency(amount) {
   return `₦${Number(amount).toLocaleString()}`;
@@ -22,14 +19,7 @@ function PrintLabelModal({ product, onClose, onPrinted }) {
   const [error, setError] = useState("");
   const [printerName, setPrinterName] = useState(getSavedPrinter("label"));
   const [showPicker, setShowPicker] = useState(false);
-  const [offsetX, setOffsetX] = useState(getLabelOffset);
   const modalRef = useModalKeyboard(onClose);
-
-  function nudgeOffset(stepMm) {
-    const next = Math.max(-LABEL_OFFSET_LIMIT, Math.min(LABEL_OFFSET_LIMIT, Math.round((offsetX + stepMm) * 2) / 2));
-    setOffsetX(next);
-    saveLabelOffset(next);
-  }
 
   async function handlePrint() {
     setError("");
@@ -78,8 +68,8 @@ function PrintLabelModal({ product, onClose, onPrinted }) {
               /* 25mm tall label: ~3mm name + ~13mm barcode + ~3.5mm price inside 1.5mm padding */
               .label-price { font: 600 8pt Arial, sans-serif; margin: 0.5mm 0 0; }
               .label-page svg { display: block; width: 40mm; max-width: 40mm; max-height: 13mm; height: auto; margin: 0 auto; }
-              /* Per-computer horizontal nudge to correct printer feed offset */
-              .label-page > * { position: relative; left: ${offsetX}mm; }
+              /* Correct the printer's horizontal feed offset */
+              .label-page > * { position: relative; left: ${LABEL_OFFSET_MM}mm; }
             </style>
           </head>
           <body>${label.outerHTML}</body>
@@ -122,32 +112,6 @@ function PrintLabelModal({ product, onClose, onPrinted }) {
               onChange={(e) => setCopies(Math.max(1, Number(e.target.value)))}
               className="w-full h-10 px-3 rounded-lg border border-border text-sm outline-none focus:border-accent"
             />
-          </div>
-          <div>
-            <label className="block text-xs text-text-secondary mb-1.5">
-              Label position (if the print sits off-centre)
-            </label>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => nudgeOffset(-0.5)}
-                disabled={offsetX <= -LABEL_OFFSET_LIMIT}
-                className="h-9 px-3 rounded-lg border border-border text-sm disabled:opacity-50"
-              >
-                ← Left
-              </button>
-              <span className="flex-1 text-center text-sm text-slate-900">
-                {offsetX === 0 ? "Centred" : `${Math.abs(offsetX)} mm ${offsetX > 0 ? "right" : "left"}`}
-              </span>
-              <button
-                type="button"
-                onClick={() => nudgeOffset(0.5)}
-                disabled={offsetX >= LABEL_OFFSET_LIMIT}
-                className="h-9 px-3 rounded-lg border border-border text-sm disabled:opacity-50"
-              >
-                Right →
-              </button>
-            </div>
           </div>
           {showPicker ? (
             <PrinterPicker

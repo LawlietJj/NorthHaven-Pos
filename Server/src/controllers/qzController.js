@@ -14,6 +14,27 @@ function getPrivateKey() {
   return null;
 }
 
+// Startup self-check: if the signing key doesn't belong to the served
+// certificate, QZ Tray rejects every signature and keeps showing trust
+// prompts even with override.crt installed. Logs only public facts.
+function logQzKeyCheck() {
+  try {
+    const cert = new crypto.X509Certificate(fs.readFileSync(certificatePath));
+    const key = getPrivateKey();
+    const source = process.env.QZ_PRIVATE_KEY?.trim() ? "QZ_PRIVATE_KEY env" : "qz/private-key.pem";
+    if (!key) {
+      console.error("[qz] No signing key configured (set QZ_PRIVATE_KEY). Printing will be untrusted.");
+      return;
+    }
+    const matches = cert.checkPrivateKey(crypto.createPrivateKey(key));
+    const log = matches ? console.log : console.error;
+    log(`[qz] key source=${source} matchesCertificate=${matches} certFingerprint=${cert.fingerprint256}`);
+  } catch (error) {
+    console.error(`[qz] Key check failed: ${error.message}`);
+  }
+}
+logQzKeyCheck();
+
 function getSigningRequest(req) {
   if (typeof req.body === "string") return req.body;
   if (req.body && typeof req.body.request === "string") return req.body.request;

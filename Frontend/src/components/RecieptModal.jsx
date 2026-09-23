@@ -5,20 +5,44 @@ import { PrinterNotSelectedError, getSavedPrinter, printReceipt } from "../utils
 import { useModalKeyboard } from "../utils/useModalKeyboard";
 import PrinterPicker from "./PrinterPicker";
 
+// Both shops share one location, so one address for every receipt.
+const SHOP_ADDRESS = "SHOP 02, Global Hub, Gyadi Gyadi Court Rd, Kano";
+
 function formatCurrency(amount) {
   return `₦${Number(amount).toLocaleString()}`;
 }
 
-async function imageToDataUrl(source) {
-  const response = await fetch(source);
-  const blob = await response.blob();
+// Thermal printers only print black or nothing, so the colour logo (light
+// orange, black corners) comes out blank or muddy. Redraw it as pure black on
+// white, masked to the circle, as a PNG sized for the receipt.
+const LOGO_PRINT_PX = 200;
 
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+async function logoToPrintableDataUrl(source) {
+  const image = new Image();
+  image.src = source;
+  await image.decode();
+
+  const canvas = document.createElement("canvas");
+  canvas.width = LOGO_PRINT_PX;
+  canvas.height = LOGO_PRINT_PX;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(image, 0, 0, LOGO_PRINT_PX, LOGO_PRINT_PX);
+
+  const pixels = ctx.getImageData(0, 0, LOGO_PRINT_PX, LOGO_PRINT_PX);
+  const data = pixels.data;
+  const radius = LOGO_PRINT_PX / 2;
+  for (let i = 0; i < data.length; i += 4) {
+    const x = (i / 4) % LOGO_PRINT_PX;
+    const y = Math.floor(i / 4 / LOGO_PRINT_PX);
+    const outsideCircle = Math.hypot(x + 0.5 - radius, y + 0.5 - radius) > radius;
+    const luminance = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    // Anything not near-white (the blue and the orange) becomes solid black.
+    const value = outsideCircle || luminance > 215 ? 255 : 0;
+    data[i] = data[i + 1] = data[i + 2] = value;
+    data[i + 3] = 255;
+  }
+  ctx.putImageData(pixels, 0, 0);
+  return canvas.toDataURL("image/png");
 }
 
 function ReceiptModal({ receipt, onClose }) {
@@ -27,6 +51,8 @@ function ReceiptModal({ receipt, onClose }) {
   const [printerName, setPrinterName] = useState(getSavedPrinter("receipt"));
   const [showPicker, setShowPicker] = useState(false);
   const modalRef = useModalKeyboard(onClose);
+  // total_amount is what was collected; the pre-discount subtotal is total + discount.
+  const discountAmount = Number(receipt.discount_amount) || 0;
 
   async function handlePrint() {
     setError("");
@@ -36,11 +62,16 @@ function ReceiptModal({ receipt, onClose }) {
       if (!receiptElement) throw new Error("The receipt preview is not ready yet.");
 
       const receiptMarkup = receiptElement.cloneNode(true);
-      const logoDataUrl = await imageToDataUrl(logo);
+      const logoDataUrl = await logoToPrintableDataUrl(logo);
       const itemCount = receipt.sales.reduce((count, sale) => count + sale.sale_items.length, 0);
       const receiptHeight = Math.max(200, 90 + itemCount * 8);
+      // Explicit pixel size too: the print renderer can't lay out an image
+      // whose size only comes from Tailwind classes that aren't in this HTML.
       receiptMarkup.querySelectorAll("img").forEach((image) => {
         image.src = logoDataUrl;
+        image.removeAttribute("class");
+        image.setAttribute("width", "42");
+        image.setAttribute("height", "42");
       });
 
       const html = `<!doctype html>
@@ -53,6 +84,8 @@ function ReceiptModal({ receipt, onClose }) {
               body { font: 8.5pt Arial, sans-serif; line-height: 1.25; }
               .receipt-print { width: 74mm; box-sizing: border-box; padding: 2mm; overflow: hidden; }
               .text-center { text-align: center; }
+              /* ~47 chars at 7pt fits the 70mm printable width on one line */
+              .receipt-address { font-size: 7pt; white-space: nowrap; overflow: hidden; margin-top: 0.5mm; }
               .text-right { text-align: right; }
               .text-xs { font-size: 9pt; }
               .text-sm { font-size: 8.5pt; }
@@ -63,9 +96,10 @@ function ReceiptModal({ receipt, onClose }) {
               .grid { display: grid; }
               .grid-cols-2 { grid-template-columns: 1fr 1fr; }
               .gap-y-1 > * { margin-top: 1mm; }
-              .border-y { border-top: 0.2mm dashed #999; border-bottom: 0.2mm dashed #999; }
-              .border-t-2 { border-top: 0.5mm solid #111; }
-              .border-border { border-color: #ccc; }
+              /* Thermal print is black-or-nothing: thin grey lines vanish, so all rules are black */
+              .border-y { border-top: 0.4mm dashed #000; border-bottom: 0.4mm dashed #000; }
+              .border-t-2 { border-top: 0.6mm solid #000; }
+              .border-border { border-color: #000; }
               .py-2 { padding-top: 2mm; padding-bottom: 2mm; }
               .py-3 { padding-top: 3mm; padding-bottom: 3mm; }
               .pt-3 { padding-top: 3mm; }
@@ -83,8 +117,9 @@ function ReceiptModal({ receipt, onClose }) {
               th:nth-child(4), td:nth-child(4) { width: 25%; }
               th:nth-child(5), td:nth-child(5) { width: 25%; }
               th:nth-child(2), td:nth-child(2), th:nth-child(4), td:nth-child(4), th:nth-child(5), td:nth-child(5) { text-align: right; }
-              tr { border-bottom: 0.2mm solid #ccc; }
-              img { display: block; width: 11mm; height: 11mm; margin: 0 auto; object-fit: cover; }
+              tr { border-bottom: 0.3mm dashed #000; }
+              tbody tr:last-child { border-bottom: 0; }
+              img { display: block; width: 11mm; height: 11mm; margin: 0 auto; }
             </style>
           </head>
           <body>${receiptMarkup.outerHTML}</body>
@@ -114,6 +149,7 @@ function ReceiptModal({ receipt, onClose }) {
           <div className="text-center mb-5">
             <img src={logo} alt="Exotic Collections logo" className="mx-auto h-16 w-16 rounded-full object-cover" />
             <p className="mt-3 font-semibold tracking-wide text-slate-900">EXOTIC COLLECTIONS</p>
+            <p className="receipt-address mt-1 text-[10px] whitespace-nowrap text-text-secondary">{SHOP_ADDRESS}</p>
             <p className="text-xs text-text-secondary mt-1">Sales Receipt</p>
           </div>
 
@@ -156,6 +192,19 @@ function ReceiptModal({ receipt, onClose }) {
               </tbody>
             </table>
           </div>
+
+          {discountAmount > 0 && (
+            <div className="border-t-2 border-slate-900 mt-4 pt-3 text-xs text-slate-700">
+              <div className="flex justify-between">
+                <span>SUBTOTAL</span>
+                <span>{formatCurrency(Number(receipt.total_amount) + discountAmount)}</span>
+              </div>
+              <div className="flex justify-between mt-1">
+                <span>DISCOUNT</span>
+                <span>-{formatCurrency(discountAmount)}</span>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-between border-t-2 border-slate-900 mt-4 pt-3 font-semibold text-slate-900">
             <span>OVERALL TOTAL</span>

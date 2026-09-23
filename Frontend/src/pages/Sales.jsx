@@ -146,6 +146,7 @@ function Sales() {
       "Processed By": transaction.cashier_name,
       Shops: transaction.sales.map((sale) => sale.shops.shop_code).join(", "),
       "Payment Method": paymentMethod(transaction),
+      "Discount (₦)": Number(transaction.discount_amount || 0),
       "Total Amount (₦)": Number(transaction.total_amount),
     }));
     const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -256,7 +257,14 @@ function Sales() {
                   {t.sales.map((s) => s.shops.shop_code).join(", ")}
                 </td>
                 <td className="px-5 py-3 text-text-secondary capitalize">{paymentMethod(t)}</td>
-                <td className="px-5 py-3 text-right font-semibold text-primary">{formatCurrency(t.total_amount)}</td>
+                <td className="px-5 py-3 text-right font-semibold text-primary">
+                  {formatCurrency(t.total_amount)}
+                  {Number(t.discount_amount) > 0 && (
+                    <span className="block text-xs font-normal text-text-muted">
+                      -{formatCurrency(t.discount_amount)} discount
+                    </span>
+                  )}
+                </td>
                 <td className="px-5 py-3 text-text-secondary">
                   {new Date(t.created_at).toLocaleString()}
                 </td>

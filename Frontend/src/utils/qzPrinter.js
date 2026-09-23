@@ -36,28 +36,6 @@ export function savePrinter(role, printerName) {
   sessionPrinters[role] = printerName;
 }
 
-// Horizontal nudge (mm) for barcode labels — each printer feeds slightly
-// differently, so it's tuned and saved per computer. Positive moves right.
-const LABEL_OFFSET_KEY = "printer.label.offsetX";
-export const LABEL_OFFSET_LIMIT = 5;
-
-export function getLabelOffset() {
-  try {
-    const value = Number(localStorage.getItem(LABEL_OFFSET_KEY));
-    return Number.isFinite(value) ? Math.max(-LABEL_OFFSET_LIMIT, Math.min(LABEL_OFFSET_LIMIT, value)) : 0;
-  } catch {
-    return 0;
-  }
-}
-
-export function saveLabelOffset(offsetMm) {
-  try {
-    localStorage.setItem(LABEL_OFFSET_KEY, String(offsetMm));
-  } catch {
-    // Storage blocked — offset applies for this session only.
-  }
-}
-
 let connectionPromise;
 let securityConfigured = false;
 

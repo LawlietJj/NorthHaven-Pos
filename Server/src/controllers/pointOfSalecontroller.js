@@ -26,9 +26,34 @@ async function lookupByBarcode(req, res, next) {
   }
 }
 
+function toKobo(amount) {
+  return Math.round(Number(amount) * 100);
+}
+
+// Sales are normally from one shop, which then takes the whole discount. If a
+// sale does mix shops, each shop's share follows its share of the gross, with
+// any leftover kobo from rounding on the last shop so the parts add up exactly.
+function splitDiscount(discountKobo, shopGrossKobo, grossKobo) {
+  const shares = new Map();
+  const shopIds = [...shopGrossKobo.keys()];
+  let allocated = 0;
+  shopIds.forEach((shopId, index) => {
+    const share =
+      index === shopIds.length - 1
+        ? discountKobo - allocated
+        : grossKobo === 0
+          ? 0
+          : Math.floor((discountKobo * shopGrossKobo.get(shopId)) / grossKobo);
+    shares.set(shopId, share);
+    allocated += share;
+  });
+  return shares;
+}
+
 /**
  * POST /checkout
- * Body: { items: [{ product_id, quantity }], payment: { method, amount_tendered } }
+ * Body: { items: [{ product_id, quantity }], payment: { method, amount_tendered }, discount_amount? }
+ * discount_amount is a fixed Naira amount off the whole sale (typed at the till).
  *
  * This is the core POS transaction. Everything happens in ONE Prisma
  * transaction: stock is re-checked and deducted, transactions/sales/
@@ -38,6 +63,7 @@ async function lookupByBarcode(req, res, next) {
 async function checkout(req, res, next) {
   try {
     const { items, payment } = req.body;
+    const discountKobo = toKobo(req.body.discount_amount || 0);
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "Cart cannot be empty." });
@@ -72,34 +98,49 @@ async function checkout(req, res, next) {
         itemsByShop.get(product.shop_id).push({ item, product });
       }
 
-      let totalAmount = 0;
-      for (const [, shopItems] of itemsByShop) {
-        for (const { item, product } of shopItems) {
-          totalAmount += Number(product.selling_price) * item.quantity;
-        }
+      // Money is handled in kobo (integers) so splitting a discount can't drift.
+      const shopGrossKobo = new Map();
+      for (const [shopId, shopItems] of itemsByShop) {
+        shopGrossKobo.set(
+          shopId,
+          shopItems.reduce((sum, { item, product }) => sum + toKobo(product.selling_price) * item.quantity, 0)
+        );
       }
+      const grossKobo = [...shopGrossKobo.values()].reduce((a, b) => a + b, 0);
 
-      if (Number(payment.amount_tendered) < totalAmount) {
+      if (discountKobo > grossKobo) {
+        throw Object.assign(new Error("Discount cannot be more than the sale total."), { status: 400 });
+      }
+      const totalKobo = grossKobo - discountKobo;
+      const totalAmount = totalKobo / 100;
+
+      if (toKobo(payment.amount_tendered) < totalKobo) {
         throw Object.assign(
           new Error(`Amount tendered (${payment.amount_tendered}) is less than total (${totalAmount}).`),
           { status: 400 }
         );
       }
 
+      // total_amount / subtotal store what was actually collected (after
+      // discount) so revenue reports stay correct; gross = amount + discount.
       const transaction = await tx.transactions.create({
-        data: { cashier_id: req.user.user_id, total_amount: totalAmount },
+        data: { cashier_id: req.user.user_id, total_amount: totalAmount, discount_amount: discountKobo / 100 },
       });
 
+      const shopDiscountKobo = splitDiscount(discountKobo, shopGrossKobo, grossKobo);
       const salesBreakdown = [];
 
       for (const [shopId, shopItems] of itemsByShop) {
-        const subtotal = shopItems.reduce(
-          (sum, { item, product }) => sum + Number(product.selling_price) * item.quantity,
-          0
-        );
+        const saleDiscountKobo = shopDiscountKobo.get(shopId);
+        const subtotal = (shopGrossKobo.get(shopId) - saleDiscountKobo) / 100;
 
         const sale = await tx.sales.create({
-          data: { transaction_id: transaction.transaction_id, shop_id: shopId, subtotal },
+          data: {
+            transaction_id: transaction.transaction_id,
+            shop_id: shopId,
+            subtotal,
+            discount_amount: saleDiscountKobo / 100,
+          },
         });
 
         const saleItemsCreated = [];
@@ -134,7 +175,7 @@ async function checkout(req, res, next) {
         salesBreakdown.push({ sale_id: sale.sale_id, shop_id: shopId, subtotal, items: saleItemsCreated });
       }
 
-      const changeGiven = Number(payment.amount_tendered) - totalAmount;
+      const changeGiven = (toKobo(payment.amount_tendered) - totalKobo) / 100;
       const paymentRecord = await tx.payments.create({
         data: {
           transaction_id: transaction.transaction_id,
@@ -150,6 +191,7 @@ async function checkout(req, res, next) {
     return res.status(201).json({
       transaction_id: result.transaction.transaction_id,
       total_amount: result.transaction.total_amount,
+      discount_amount: result.transaction.discount_amount,
       sales: result.salesBreakdown,
       payment: result.payment,
     });
