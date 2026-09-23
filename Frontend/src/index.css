@@ -59,9 +59,9 @@ body,
     page: label;
   }
   .label-page {
-    width: 50mm;
-    height: 40mm;
-    padding: 2mm;
+    width: 51mm;
+    height: 25mm;
+    padding: 1.5mm;
     text-align: center;
   }
 
@@ -98,7 +98,7 @@ body,
     margin: 1mm 0 0;
   }
   @page {
-    size: 50mm 40mm;
+    size: 51mm 25mm;
     margin: 0;
   }
 
@@ -108,7 +108,7 @@ body,
   }
 
   @page label {
-    size: 50mm 40mm;
+    size: 51mm 25mm;
     margin: 0;
   }
 }

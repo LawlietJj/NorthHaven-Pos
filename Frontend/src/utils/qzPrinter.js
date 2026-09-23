@@ -1,8 +1,41 @@
 import qz from "qz-tray/qz-tray.js";
 import apiClient from "../api/apiClient";
 
-const BARCODE_PRINTER_NAME = "Xprinter XP-365B";
-const RECEIPT_PRINTER_NAME = "Xprinter XP-80TS";
+// Each computer picks its own printers once; the choice is saved in this
+// browser, per role, so receipts and labels never go to each other's printer.
+export const PRINTER_ROLES = {
+  receipt: { storageKey: "printer.receipt", label: "Receipt printer" },
+  label: { storageKey: "printer.label", label: "Label printer" },
+};
+
+// Fallback for when localStorage is blocked, so a choice lasts for this page load.
+const sessionPrinters = {};
+
+export class PrinterNotSelectedError extends Error {
+  constructor(role, message) {
+    super(message);
+    this.name = "PrinterNotSelectedError";
+    this.role = role;
+  }
+}
+
+export function getSavedPrinter(role) {
+  try {
+    return localStorage.getItem(PRINTER_ROLES[role].storageKey) || "";
+  } catch {
+    return "";
+  }
+}
+
+export function savePrinter(role, printerName) {
+  try {
+    localStorage.setItem(PRINTER_ROLES[role].storageKey, printerName);
+  } catch {
+    // Storage blocked — the choice just won't persist past this page load.
+  }
+  sessionPrinters[role] = printerName;
+}
+
 let connectionPromise;
 let securityConfigured = false;
 
@@ -27,23 +60,29 @@ function configureQzSecurity() {
   securityConfigured = true;
 }
 
-// Exact name first, then a case-insensitive partial match (Windows often renames
-// printers, e.g. "Xprinter XP-80TS (Copy 1)"). The error lists what QZ sees.
-async function findPrinter(expectedName) {
+export async function listPrinters() {
+  await connectToQz();
   const printers = await qz.printers.find();
-  const available = Array.isArray(printers) ? printers : [printers];
-  const model = expectedName.replace(/^xprinter\s+/i, "").toLowerCase();
+  return Array.isArray(printers) ? printers : [printers];
+}
 
-  const printer =
-    available.find((name) => name === expectedName) ||
-    available.find((name) => name.toLowerCase().includes(model));
+// Never guesses or falls back to the default printer — that could send a
+// receipt to the label printer. No valid saved choice → caller shows the picker.
+async function resolvePrinter(role) {
+  const saved = sessionPrinters[role] || getSavedPrinter(role);
+  const roleLabel = PRINTER_ROLES[role].label;
+  if (!saved) {
+    throw new PrinterNotSelectedError(role, `Choose the ${roleLabel.toLowerCase()} for this computer.`);
+  }
 
-  if (!printer) {
-    throw new Error(
-      `Printer "${expectedName}" was not found in QZ Tray. Available: ${available.join(", ") || "none"}`
+  const available = await listPrinters();
+  if (!available.includes(saved)) {
+    throw new PrinterNotSelectedError(
+      role,
+      `${roleLabel} "${saved}" is not connected. Plug it in, or choose another printer.`
     );
   }
-  return printer;
+  return saved;
 }
 
 async function connectToQz() {
@@ -61,12 +100,11 @@ async function connectToQz() {
 }
 
 export async function printBarcodeLabels(html, copies = 1) {
-  await connectToQz();
-  const printer = await findPrinter(BARCODE_PRINTER_NAME);
+  const printer = await resolvePrinter("label");
 
   const config = qz.configs.create(printer, {
     units: "mm",
-    size: { width: 50, height: 40 },
+    size: { width: 51, height: 25 },
     orientation: "portrait",
     margins: 0,
     // Force the rendered HTML to fit the declared label size instead of
@@ -94,8 +132,7 @@ export async function printBarcodeLabels(html, copies = 1) {
 }
 
 export async function printReceipt(html, height = 200) {
-  await connectToQz();
-  const printer = await findPrinter(RECEIPT_PRINTER_NAME);
+  const printer = await resolvePrinter("receipt");
 
   const config = qz.configs.create(printer, {
     units: "mm",

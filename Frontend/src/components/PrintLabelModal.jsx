@@ -1,8 +1,9 @@
 import { useState } from "react";
 import Barcode from "react-barcode";
 import { Printer, X } from "lucide-react";
-import { printBarcodeLabels } from "../utils/qzPrinter";
+import { PrinterNotSelectedError, getSavedPrinter, printBarcodeLabels } from "../utils/qzPrinter";
 import { useModalKeyboard } from "../utils/useModalKeyboard";
+import PrinterPicker from "./PrinterPicker";
 
 function formatCurrency(amount) {
   return `₦${Number(amount).toLocaleString()}`;
@@ -12,6 +13,8 @@ function PrintLabelModal({ product, onClose, onPrinted }) {
   const [copies, setCopies] = useState(product.quantity || 1);
   const [printing, setPrinting] = useState(false);
   const [error, setError] = useState("");
+  const [printerName, setPrinterName] = useState(getSavedPrinter("label"));
+  const [showPicker, setShowPicker] = useState(false);
   const modalRef = useModalKeyboard(onClose);
 
   async function handlePrint() {
@@ -33,33 +36,34 @@ function PrintLabelModal({ product, onClose, onPrinted }) {
           <head>
             <meta charset="utf-8" />
             <style>
-              @page { size: 50mm 40mm; margin: 0; }
-              html, body { margin: 0; padding: 0; width: 50mm; height: 40mm; overflow: hidden; }
+              @page { size: 51mm 25mm; margin: 0; }
+              html, body { margin: 0; padding: 0; width: 51mm; height: 25mm; overflow: hidden; }
               /* table/table-cell instead of flexbox for vertical centering — the
                  print renderer wasn't honoring flex's justify-content/align-items,
                  leaving content pinned to the top. table-cell + vertical-align is
                  the old, near-universally-supported way to center vertically. */
-              body { display: table; width: 50mm; height: 40mm; }
+              body { display: table; width: 51mm; height: 25mm; }
               .label-page {
                 display: table-cell;
                 vertical-align: middle;
-                width: 50mm;
-                height: 40mm;
+                width: 51mm;
+                height: 25mm;
                 box-sizing: border-box;
-                padding: 2mm;
+                padding: 1.5mm;
                 text-align: center;
                 overflow: hidden;
               }
               .label-name {
                 width: 100%;
-                font: 8pt Arial, sans-serif;
-                margin: 0 0 1mm;
+                font: 7pt Arial, sans-serif;
+                margin: 0 0 0.5mm;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
               }
-              .label-price { font: 600 9pt Arial, sans-serif; margin: 1mm 0 0; }
-              .label-page svg { display: block; width: 36mm; max-width: 36mm; max-height: 14mm; height: auto; margin: 0 auto; }
+              /* 25mm tall label: ~3mm name + ~13mm barcode + ~3.5mm price inside 1.5mm padding */
+              .label-price { font: 600 8pt Arial, sans-serif; margin: 0.5mm 0 0; }
+              .label-page svg { display: block; width: 40mm; max-width: 40mm; max-height: 13mm; height: auto; margin: 0 auto; }
             </style>
           </head>
           <body>${label.outerHTML}</body>
@@ -68,6 +72,7 @@ function PrintLabelModal({ product, onClose, onPrinted }) {
       await printBarcodeLabels(html, copies);
       onPrinted?.();
     } catch (printError) {
+      if (printError instanceof PrinterNotSelectedError) setShowPicker(true);
       setError(printError.message || "Could not print barcode labels.");
     } finally {
       setPrinting(false);
@@ -102,6 +107,24 @@ function PrintLabelModal({ product, onClose, onPrinted }) {
               className="w-full h-10 px-3 rounded-lg border border-border text-sm outline-none focus:border-accent"
             />
           </div>
+          {showPicker ? (
+            <PrinterPicker
+              role="label"
+              onCancel={() => setShowPicker(false)}
+              onSaved={(name) => {
+                setPrinterName(name);
+                setShowPicker(false);
+                setError("");
+              }}
+            />
+          ) : (
+            <p className="text-xs text-text-secondary">
+              Printer: <span className="text-slate-900">{printerName || "not set"}</span>{" "}
+              <button type="button" onClick={() => setShowPicker(true)} className="text-accent underline">
+                Change
+              </button>
+            </p>
+          )}
         </div>
         <div className="px-5 py-4 border-t border-border flex gap-3">
           <button onClick={onClose} className="flex-1 py-2 rounded-lg border border-border text-sm">
@@ -122,7 +145,7 @@ function PrintLabelModal({ product, onClose, onPrinted }) {
         {Array.from({ length: copies }).map((_, i) => (
           <div key={i} className="label-page">
             <p className="label-name">{product.name}</p>
-            <Barcode value={product.barcode} height={35} width={1.2} fontSize={10} margin={0} />
+            <Barcode value={product.barcode} height={28} width={1.2} fontSize={9} margin={0} />
             <p className="label-price">{formatCurrency(product.selling_price)}</p>
           </div>
         ))}
