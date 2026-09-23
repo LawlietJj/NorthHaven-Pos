@@ -6,17 +6,23 @@ async function listProducts(req, res, next) {
   try {
     const { shop_id, category_id, search, page, limit } = req.query;
 
+    // Search runs as raw SQL with an explicit COLLATE: the production MySQL sends
+    // params with a collation that clashes with the columns (error 1267) when
+    // Prisma's `contains` is used.
+    let searchIds;
+    if (search) {
+      const pattern = `%${String(search).replace(/[\\%_]/g, "\\$&")}%`;
+      const rows = await prisma.$queryRaw`
+        SELECT product_id FROM products
+        WHERE name LIKE CONVERT(${pattern} USING utf8mb4) COLLATE utf8mb4_general_ci
+           OR barcode LIKE CONVERT(${pattern} USING utf8mb4) COLLATE utf8mb4_general_ci`;
+      searchIds = rows.map((r) => r.product_id);
+    }
+
     const where = {
       shop_id: shop_id ? Number(shop_id) : undefined,
       category_id: category_id ? Number(category_id) : undefined,
-      ...(search
-        ? {
-            OR: [
-              { name: { contains: search } },
-              { barcode: { contains: search } },
-            ],
-          }
-        : {}),
+      ...(searchIds ? { product_id: { in: searchIds } } : {}),
     };
     const orderBy = [{ shop_id: "asc" }, { name: "asc" }];
 
