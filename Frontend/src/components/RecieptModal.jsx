@@ -178,15 +178,22 @@ function ReceiptModal({ receipt, onClose }) {
           <p className="text-center text-xs text-text-muted mt-5">Thank you!</p>
         </div>
 
+        {error && (
+          <p className="px-5 pt-3 text-xs text-red-600 print:hidden" role="alert">
+            {error}
+          </p>
+        )}
+
         <div className="px-5 py-4 border-t border-border flex gap-3 print:hidden">
           <button onClick={onClose} className="flex-1 py-2 rounded-lg border border-border text-sm">
             Close
           </button>
           <button
             onClick={handlePrint}
-            className="flex-1 py-2 rounded-lg bg-accent text-white text-sm flex items-center justify-center gap-2"
+            disabled={printing}
+            className="flex-1 py-2 rounded-lg bg-accent text-white text-sm flex items-center justify-center gap-2 disabled:opacity-60"
           >
-            <Printer size={16} /> Print
+            <Printer size={16} /> {printing ? "Printing..." : "Print"}
           </button>
         </div>
       </div>

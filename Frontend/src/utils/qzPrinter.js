@@ -27,6 +27,25 @@ function configureQzSecurity() {
   securityConfigured = true;
 }
 
+// Exact name first, then a case-insensitive partial match (Windows often renames
+// printers, e.g. "Xprinter XP-80TS (Copy 1)"). The error lists what QZ sees.
+async function findPrinter(expectedName) {
+  const printers = await qz.printers.find();
+  const available = Array.isArray(printers) ? printers : [printers];
+  const model = expectedName.replace(/^xprinter\s+/i, "").toLowerCase();
+
+  const printer =
+    available.find((name) => name === expectedName) ||
+    available.find((name) => name.toLowerCase().includes(model));
+
+  if (!printer) {
+    throw new Error(
+      `Printer "${expectedName}" was not found in QZ Tray. Available: ${available.join(", ") || "none"}`
+    );
+  }
+  return printer;
+}
+
 async function connectToQz() {
   configureQzSecurity();
   if (qz.websocket.isActive()) return;
@@ -43,14 +62,7 @@ async function connectToQz() {
 
 export async function printBarcodeLabels(html, copies = 1) {
   await connectToQz();
-
-  const printers = await qz.printers.find();
-  const availablePrinters = Array.isArray(printers) ? printers : [printers];
-  const printer = availablePrinters.find((name) => name === BARCODE_PRINTER_NAME);
-
-  if (!printer) {
-    throw new Error(`Printer "${BARCODE_PRINTER_NAME}" was not found in QZ Tray.`);
-  }
+  const printer = await findPrinter(BARCODE_PRINTER_NAME);
 
   const config = qz.configs.create(printer, {
     units: "mm",
@@ -83,14 +95,7 @@ export async function printBarcodeLabels(html, copies = 1) {
 
 export async function printReceipt(html, height = 200) {
   await connectToQz();
-
-  const printers = await qz.printers.find();
-  const availablePrinters = Array.isArray(printers) ? printers : [printers];
-  const printer = availablePrinters.find((name) => name === RECEIPT_PRINTER_NAME);
-
-  if (!printer) {
-    throw new Error(`Printer "${RECEIPT_PRINTER_NAME}" was not found in QZ Tray.`);
-  }
+  const printer = await findPrinter(RECEIPT_PRINTER_NAME);
 
   const config = qz.configs.create(printer, {
     units: "mm",
