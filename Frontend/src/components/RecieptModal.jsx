@@ -6,7 +6,7 @@ import { useModalKeyboard } from "../utils/useModalKeyboard";
 import PrinterPicker from "./PrinterPicker";
 
 // Both shops share one location, so one address for every receipt.
-const SHOP_ADDRESS = "SHOP 02, Global Hub, Gyadi Gyadi Court Rd, Kano";
+const SHOP_ADDRESS = "NO 6-8, SHOP 02, Global Hub, Gyadi Gyadi Court Rd, Kano";
 
 function formatCurrency(amount) {
   return `₦${Number(amount).toLocaleString()}`;
