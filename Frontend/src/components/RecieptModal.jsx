@@ -8,6 +8,8 @@ import PrinterPicker from "./PrinterPicker";
 // Both shops share one location, so one address for every receipt.
 const SHOP_ADDRESS = "NO 6-8, SHOP 02, Global Hub, Gyadi Gyadi Court Rd, Kano";
 
+const PHONE_NUMBER = "09169226347, 08136179140";
+
 function formatCurrency(amount) {
   return `₦${Number(amount).toLocaleString()}`;
 }
@@ -150,6 +152,7 @@ function ReceiptModal({ receipt, onClose }) {
             <img src={logo} alt="Exotic Collections logo" className="mx-auto h-16 w-16 rounded-full object-cover" />
             <p className="mt-3 font-semibold tracking-wide text-slate-900">EXOTIC COLLECTIONS</p>
             <p className="receipt-address mt-1 text-[10px] whitespace-nowrap text-text-secondary">{SHOP_ADDRESS}</p>
+            <p className="receipt-address text-[10px] whitespace-nowrap text-text-secondary">Tel: {PHONE_NUMBER}</p>
             <p className="text-xs text-text-secondary mt-1">Sales Receipt</p>
           </div>
 

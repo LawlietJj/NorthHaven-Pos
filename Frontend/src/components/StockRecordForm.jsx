@@ -6,7 +6,7 @@ function StockRecordForm({
   shopSelectRef,
   activeTab,
   setActiveTab,
-  isOwner,
+  canRecordPurchase,
   existingMode,
   setExistingMode,
   existingShopId,
@@ -36,7 +36,6 @@ function StockRecordForm({
   categories,
   loadingProducts,
   saving,
-  clearMessages,
   loadProductsForShop,
   onExistingSubmit,
   onNewProductSubmit,
@@ -72,7 +71,7 @@ function StockRecordForm({
       <div className="bg-surface rounded-xl p-5 shadow-sm">
         {activeTab === "existing" ? (
           <>
-            {isOwner && (
+            {canRecordPurchase && (
               <div className="flex gap-2 border-b border-border mb-5">
                 <button
                   onClick={() => setExistingMode("purchase")}
@@ -102,7 +101,6 @@ function StockRecordForm({
                   ref={shopSelectRef}
                   value={existingShopId}
                   onChange={(event) => {
-                    clearMessages();
                     setExistingShopId(event.target.value);
                     loadProductsForShop(event.target.value);
                   }}
@@ -145,7 +143,7 @@ function StockRecordForm({
                   className={inputClass}
                 />
               </div>
-              {existingMode === "purchase" && isOwner ? (
+              {existingMode === "purchase" && canRecordPurchase ? (
                 <div>
                   <label className="block text-xs text-text-secondary mb-1.5">Total Cost Paid (₦)</label>
                   <MoneyInput
@@ -170,7 +168,7 @@ function StockRecordForm({
                 </div>
               )}
             </div>
-            {existingMode === "purchase" && isOwner && existingCost === "" && (
+            {existingMode === "purchase" && canRecordPurchase && existingCost === "" && (
               <p className="mt-3 text-xs text-text-muted">Leave cost blank to record this as a plain stock adjustment.</p>
             )}
             <div className="flex justify-end mt-5">
@@ -192,7 +190,6 @@ function StockRecordForm({
                   ref={shopSelectRef}
                   value={newShopId}
                   onChange={(event) => {
-                    clearMessages();
                     setNewShopId(event.target.value);
                   }}
                   className={inputClass}
@@ -251,7 +248,7 @@ function StockRecordForm({
                   className={inputClass}
                 />
               </div>
-              {isOwner && (
+              {canRecordPurchase && (
                 <div>
                   <label className="block text-xs text-text-secondary mb-1.5">Total Cost Paid (₦)</label>
                   <MoneyInput
@@ -264,7 +261,7 @@ function StockRecordForm({
                 </div>
               )}
             </div>
-            {isOwner && <p className="mt-3 text-xs text-text-muted">Leave cost blank to record opening stock without cost data.</p>}
+            {canRecordPurchase && <p className="mt-3 text-xs text-text-muted">Leave cost blank to record opening stock without cost data.</p>}
             <div className="flex justify-end mt-5">
               <button
                 onClick={onNewProductSubmit}

@@ -51,16 +51,17 @@ async function createPurchaseBatch(req, res, next) {
 
     await logActivity(req.user.user_id, "RESTOCK", `Product #${product_id}, qty ${quantity}, cost ₦${total_cost}`);
 
+    // Managers can record purchases, but cost_price is still Owner-only to read.
     return res.status(201).json({
       batch: result.batch,
       new_quantity: result.updatedProduct.quantity,
-      new_cost_price: result.updatedProduct.cost_price,
+      ...(req.user.role === "owner" && { new_cost_price: result.updatedProduct.cost_price }),
     });
   } catch (err) {
     // The DB trigger (trg_purchase_batches_owner_only) is the real backstop —
     // this just gives a cleaner message if it somehow gets hit.
     if (err.message && err.message.includes("Only the Business Owner")) {
-      return res.status(403).json({ error: "Only the Business Owner can record a purchase batch." });
+      return res.status(403).json({ error: "Only the Owner or a Manager can record a purchase batch." });
     }
     next(err);
   }

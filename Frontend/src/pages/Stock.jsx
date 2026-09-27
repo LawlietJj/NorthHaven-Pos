@@ -18,6 +18,7 @@ function Stock() {
   const location = useLocation();
   const user = getCurrentUser();
   const isOwner = user?.role === "owner";
+  const canRecordPurchase = isOwner || user?.role === "manager";
   const { showToast } = useToast();
   const shopSelectRef = useRef(null);
   const prefillShopId = location.state?.prefillShopId;
@@ -36,12 +37,10 @@ function Stock() {
   const [movementTotal, setMovementTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
 
   const [activeTab, setActiveTab] = useState("existing");
-  const [existingMode, setExistingMode] = useState(isOwner ? "purchase" : "adjustment");
+  const [existingMode, setExistingMode] = useState(canRecordPurchase ? "purchase" : "adjustment");
   const [existingShopId, setExistingShopId] = useState(prefillShopId ? String(prefillShopId) : "");
   const [existingProductId, setExistingProductId] = useState(prefillProductId ? String(prefillProductId) : "");
   const [existingQuantity, setExistingQuantity] = useState("");
@@ -56,7 +55,7 @@ function Stock() {
   const [newCost, setNewCost] = useState("");
 
   async function loadPurchaseHistory(page = 1) {
-    if (!isOwner) return;
+    if (!canRecordPurchase) return;
     const res = await listPurchaseBatches({ page, limit: PURCHASE_PAGE_SIZE });
     setPurchaseBatches(res.data);
     setPurchasePage(res.page);
@@ -113,7 +112,7 @@ function Stock() {
 
         if (prefillShopId && prefillProductId) {
           setActiveTab("existing");
-          setExistingMode(isOwner ? "purchase" : "adjustment");
+          setExistingMode(canRecordPurchase ? "purchase" : "adjustment");
           await loadProductsForShop(String(prefillShopId), String(prefillProductId));
         }
       } catch {
@@ -124,35 +123,32 @@ function Stock() {
     }
 
     loadPage();
+    // Runs once when the page opens; the loaders are recreated every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!newShopId) {
-      setCategories([]);
-      setNewCategoryId("");
-      return;
-    }
+    if (!newShopId) return;
+    listCategories(newShopId)
+      .then(setCategories)
+      .catch(() => showToast("Could not load categories for this shop.", "error"));
+  }, [newShopId, showToast]);
 
-    listCategories(newShopId).then(setCategories).catch(() => notifyError("Could not load categories for this shop."));
-  }, [newShopId]);
-
-  function clearMessages() {
-    setError("");
-    setSuccess("");
+  function handleNewShopChange(shopId) {
+    setNewShopId(shopId);
+    setNewCategoryId("");
+    if (!shopId) setCategories([]);
   }
 
   function notifyError(message) {
-    setError(message);
     showToast(message, "error");
   }
 
   function notifySuccess(message) {
-    setSuccess(message);
     showToast(message);
   }
 
   async function handleExistingSubmit() {
-    clearMessages();
     if (!existingShopId || !existingProductId || !existingQuantity) {
       notifyError("Select a shop, product, and quantity first.");
       return;
@@ -189,7 +185,6 @@ function Stock() {
   }
 
   async function handleNewProductSubmit() {
-    clearMessages();
     if (!newShopId || !newCategoryId || !newProductName || !newSellingPrice || !newQuantity) {
       notifyError("Complete the shop, product, category, price, and quantity fields first.");
       return;
@@ -208,7 +203,7 @@ function Stock() {
         image_url: null,
       });
 
-      if (isOwner && newCost) {
+      if (canRecordPurchase && newCost) {
         await createPurchaseBatch({
           shop_id: Number(newShopId),
           product_id: Number(created.product_id),
@@ -253,7 +248,7 @@ function Stock() {
         shopSelectRef={shopSelectRef}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        isOwner={isOwner}
+        canRecordPurchase={canRecordPurchase}
         existingMode={existingMode}
         setExistingMode={setExistingMode}
         existingShopId={existingShopId}
@@ -267,7 +262,7 @@ function Stock() {
         existingReason={existingReason}
         setExistingReason={setExistingReason}
         newShopId={newShopId}
-        setNewShopId={setNewShopId}
+        setNewShopId={handleNewShopChange}
         newCategoryId={newCategoryId}
         setNewCategoryId={setNewCategoryId}
         newProductName={newProductName}
@@ -283,14 +278,14 @@ function Stock() {
         categories={categories}
         loadingProducts={loadingProducts}
         saving={saving}
-        clearMessages={clearMessages}
         loadProductsForShop={loadProductsForShop}
         onExistingSubmit={handleExistingSubmit}
         onNewProductSubmit={handleNewProductSubmit}
       />
 
       <StockHistory
-        isOwner={isOwner}
+        showPurchases={canRecordPurchase}
+        showMovements={!isOwner}
         purchaseBatches={purchaseBatches}
         purchasePage={purchasePage}
         purchasePageSize={PURCHASE_PAGE_SIZE}

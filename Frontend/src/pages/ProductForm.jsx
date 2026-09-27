@@ -25,13 +25,13 @@ function ProductForm({ mode }) {
   const user = getCurrentUser();
   const { showToast } = useToast();
   const isOwner = user?.role === "owner";
+  const canRecordPurchase = isOwner || user?.role === "manager";
   const isNew = mode === "create" || id === "new";
 
   const [shops, setShops] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
   const [printLabelOpen, setPrintLabelOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -59,7 +59,6 @@ function ProductForm({ mode }) {
 
       if (!isNew) {
         if (!id || !Number.isInteger(Number(id))) {
-          setError("This product link is invalid.");
           showToast("This product link is invalid.", "error");
           setLoading(false);
           return;
@@ -81,7 +80,6 @@ function ProductForm({ mode }) {
             listCategories(data.shop_id).then(setCategories).finally(() => setLoading(false));
           })
           .catch(() => {
-            setError("Could not load this product.");
             showToast("Could not load this product.", "error");
             setLoading(false);
           });
@@ -91,7 +89,7 @@ function ProductForm({ mode }) {
     }
 
     loadProductForm();
-  }, [id, isNew]);
+  }, [id, isNew, showToast]);
 
   function handleShopChange(shopId) {
     setForm((f) => ({ ...f, shop_id: shopId, category_id: "" }));
@@ -103,7 +101,6 @@ function ProductForm({ mode }) {
   }
 
   async function handleSave() {
-    setError("");
     setSaving(true);
     try {
       if (isNew) {
@@ -144,11 +141,10 @@ function ProductForm({ mode }) {
     if (!file) return;
 
     setUploading(true);
-    setError("");
     try {
       const url = await uploadImage(file);
       handleChange("image_url", url);
-    } catch (err) {
+    } catch {
       showToast("Could not upload image. Try again.", "error");
     } finally {
       setUploading(false);
@@ -162,7 +158,7 @@ function ProductForm({ mode }) {
 
   function handleNewLabelPrinted() {
     setPrintLabelOpen(false);
-    if (isOwner) setRestockOpen(true);
+    if (canRecordPurchase) setRestockOpen(true);
     else setAdjustOpen(true);
   }
 
@@ -351,7 +347,7 @@ function ProductForm({ mode }) {
                   {status.label}
                 </span>
                 <div className="flex-1" />
-                {isOwner && (
+                {canRecordPurchase && (
                   <button
                     onClick={() => setRestockOpen(true)}
                     className="text-sm font-medium text-accent hover:underline"

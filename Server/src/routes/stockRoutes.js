@@ -24,7 +24,7 @@ function validate(req, res, next) {
 router.post(
   "/purchase-batches",
   requireAuth,
-  requireRole("owner"),
+  requireRole("owner", "manager"),
   [
     body("shop_id").isInt().withMessage("A valid shop_id is required."),
     body("product_id").isInt().withMessage("A valid product_id is required."),
@@ -35,7 +35,7 @@ router.post(
   createPurchaseBatch
 );
 
-router.get("/purchase-batches", requireAuth, requireRole("owner"), listPurchaseBatches);
+router.get("/purchase-batches", requireAuth, requireRole("owner", "manager"), listPurchaseBatches);
 
 
 router.post(
