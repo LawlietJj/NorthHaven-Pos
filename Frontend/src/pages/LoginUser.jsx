@@ -53,9 +53,9 @@ function LoginUser() {
       <section className="hidden lg:flex lg:w-[42%] min-h-screen bg-primary flex-col">
         <div className="flex-1 px-12 py-12 flex flex-col justify-center">
           <div className="max-w-md">
-            <img src={logo} alt="Exotic Collections logo" className="w-12 h-12 rounded-full object-cover mb-6" />
-            <p className="text-white text-2xl font-semibold tracking-tight">EXOTIC</p>
-            <p className="text-slate-300 text-sm tracking-[0.25em] mt-1">COLLECTIONS</p>
+            <img src={logo} alt="NorthHAVEN POS SYSTEM logo" className="w-12 h-12 rounded-full object-cover mb-6" />
+            <p className="text-white text-2xl font-semibold tracking-tight">NORTHHAVEN</p>
+            <p className="text-slate-300 text-sm tracking-[0.25em] mt-1">POS SYSTEM</p>
             <div className="w-10 h-px bg-accent mt-8 mb-6" />
             <h1 className="text-3xl xl:text-4xl font-semibold text-white leading-tight">
               Manage your business
@@ -73,14 +73,14 @@ function LoginUser() {
       <main className="flex-1 min-h-screen bg-bg flex items-center justify-center px-6 py-12 sm:px-10 lg:px-12">
         <div className="w-full max-w-md">
           <div className="lg:hidden mb-10">
-            <img src={logo} alt="Exotic Collections logo" className="w-11 h-11 rounded-full object-cover mb-4" />
-            <p className="text-xl font-semibold text-primary">EXOTIC</p>
-            <p className="text-xs tracking-[0.25em] text-slate-500 mt-1">COLLECTIONS</p>
+            <img src={logo} alt="NorthHAVEN POS SYSTEM logo" className="w-11 h-11 rounded-full object-cover mb-4" />
+            <p className="text-xl font-semibold text-primary">NORTHHAVEN</p>
+            <p className="text-xs tracking-[0.25em] text-slate-500 mt-1">POS SYSTEM</p>
           </div>
 
           <div className="mb-8">
             <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Welcome back</h2>
-            <p className="text-sm text-slate-500 mt-2">Sign in to your EXOTIC account</p>
+            <p className="text-sm text-slate-500 mt-2">Sign in to your NORTHHAVEN account</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -140,7 +140,7 @@ function LoginUser() {
           </form>
 
           <div className="mt-10 pt-6 border-t border-border">
-            <p className="text-center text-xs text-slate-400">EXOTIC Collections POS</p>
+            <p className="text-center text-xs text-slate-400">NorthHAVEN POS SYSTEM</p>
             <p className="text-center text-[11px] text-slate-300 mt-1">Secure business management</p>
           </div>
         </div>

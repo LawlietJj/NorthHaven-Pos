@@ -102,7 +102,7 @@ function OwnerDashboard() {
       </div>
       
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl bg-primary p-5 text-white shadow-[0_10px_25px_rgba(0,51,153,0.16)]">
+        <div className="rounded-xl bg-primary p-5 text-white shadow-[0_10px_25px_rgba(27,61,45,0.16)]">
           <p className="text-sm text-white/70 mb-1">Combined Sales Today</p>
           <p className="text-2xl font-semibold">{formatCurrency(data.today.combined.revenue)}</p>
           <p className="text-xs text-white/60 mt-1">{data.today.combined.sales_count} sale(s)</p>

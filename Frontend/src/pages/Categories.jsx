@@ -181,7 +181,7 @@ function Categories() {
         <div>
           <p className="text-sm text-text-secondary">Organize products into clear, shop-specific groups.</p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-text-secondary">
-            <span className="rounded-full bg-blue-50 px-3 py-1.5 text-blue-700 shadow-sm">{categories.length} total categories</span>
+            <span className="rounded-full bg-surface-muted px-3 py-1.5 text-primary shadow-sm">{categories.length} total categories</span>
             <span className="rounded-full bg-slate-100 px-3 py-1.5 shadow-sm">{topLevel.length} parent groups</span>
             <span className="rounded-full bg-slate-100 px-3 py-1.5 shadow-sm">{subcategories.length} subcategories</span>
           </div>
@@ -190,14 +190,14 @@ function Categories() {
           {isOwner && (
             <button
               onClick={openAddParent}
-              className="flex items-center justify-center gap-2 rounded-lg border border-accent px-4 py-2.5 text-sm font-medium text-accent transition hover:bg-blue-50"
+              className="flex items-center justify-center gap-2 rounded-lg border border-accent px-4 py-2.5 text-sm font-medium text-accent transition hover:bg-surface-muted"
             >
               <Plus size={16} /> Add Parent Category
             </button>
           )}
           <button
             onClick={openAddSub}
-            className="flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-800"
+            className="flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:bg-accent-strong"
           >
             <Plus size={16} /> Add Subcategory
           </button>
@@ -366,7 +366,7 @@ function CategoryRow({ category, shop, onEdit, onDelete, isChild = false }) {
   return (
     <div className={`grid gap-3 px-5 py-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center md:gap-4 ${isChild ? "bg-slate-50/70" : ""}`}>
       <div className={`flex min-w-0 items-center gap-3 ${isChild ? "pl-6" : ""}`}>
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isChild ? "bg-white text-slate-400" : "bg-blue-50 text-accent"}`}>
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isChild ? "bg-white text-slate-400" : "bg-surface-muted text-accent"}`}>
           <FolderTree size={17} />
         </span>
         <div className="min-w-0">

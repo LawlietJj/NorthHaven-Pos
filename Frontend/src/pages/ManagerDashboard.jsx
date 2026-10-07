@@ -65,7 +65,7 @@ function ManagerDashboard() {
       </div>
       {/* Product-focused stat cards */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded-xl bg-primary p-5 text-white shadow-[0_10px_25px_rgba(0,51,153,0.16)]">
+        <div className="rounded-xl bg-primary p-5 text-white shadow-[0_10px_25px_rgba(27,61,45,0.16)]">
           <div className="flex items-center gap-2 mb-1">
             <Package size={16} className="text-white/70" />
             <p className="text-sm text-white/70">Total Products</p>

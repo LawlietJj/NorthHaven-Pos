@@ -67,13 +67,13 @@ function Sidebar({ mobileOpen = false, onCloseMobile }) {
         <div className={`flex items-center mb-8 justify-between ${collapsed ? "lg:justify-center" : "px-2"}`}>
           <img
             src={logo}
-            alt="Exotic Collections logo"
+            alt="NorthHAVEN POS SYSTEM logo"
             className={`${collapsed ? "lg:h-10 lg:w-10" : ""} h-9 w-9 rounded-full object-cover`}
           />
           {showLabels && (
             <div className="flex-1 ml-3">
-              <p className="text-white text-lg font-semibold">EXOTIC</p>
-              <p className="text-slate-400 text-xs tracking-[0.2em]">COLLECTIONS</p>
+              <p className="text-white text-lg font-semibold">NORTHHAVEN</p>
+              <p className="text-slate-400 text-xs tracking-[0.2em]">POS SYSTEM</p>
             </div>
           )}
           {/* Mobile: close button */}

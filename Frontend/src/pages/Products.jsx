@@ -226,7 +226,7 @@ function Products() {
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => navigate(`/products/${product.product_id}`)}
-                        className="rounded-lg p-2 text-text-secondary transition hover:bg-orange-50 hover:text-accent"
+                        className="rounded-lg p-2 text-text-secondary transition hover:bg-surface-muted hover:text-accent"
                         title={`Edit ${product.name}`}
                       >
                         <Pencil size={16} />

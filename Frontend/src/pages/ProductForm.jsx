@@ -400,7 +400,7 @@ function ProductForm({ mode }) {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-4 py-2.5 rounded-lg bg-accent text-white text-sm font-medium hover:bg-blue-800 transition disabled:opacity-60"
+          className="px-4 py-2.5 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent-strong transition disabled:opacity-60"
         >
           {saving ? "Saving…" : isNew ? "Create Product" : "Update Product"}
         </button>
