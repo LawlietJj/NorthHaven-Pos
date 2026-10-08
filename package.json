@@ -1,6 +1,8 @@
 {
+  "name": "northhaven-pos",
+  "private": true,
   "scripts": {
-    "build": "npm install --prefix Server && npm install --prefix Frontend --include=dev && npm run build --prefix Frontend",
+    "postinstall": "npm install --prefix Server && cd Server && npx prisma generate && npx prisma migrate deploy && cd .. && npm install --prefix Frontend --include=dev && npm run build --prefix Frontend",
     "start": "node Server/src/server.js"
   },
   "dependencies": {
