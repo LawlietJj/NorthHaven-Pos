@@ -1,5 +1,6 @@
 const express = require("express");
 const helmet = require("helmet");
+const path = require("path");
 const { globalRateLimiter } = require("./middleware/rateLimiter");
 const cors = require("cors");
 
@@ -52,18 +53,26 @@ app.use(express.json({ limit: "1mb" })); // limit prevents oversized payload abu
 app.use(globalRateLimiter);
 
 // --- Routes ---
-app.use("/auth", authRoutes);
-app.use("/shops", shopRoutes);
-app.use("/categories", categoryRoutes);
-app.use("/products", productRoutes);
-app.use("/", stockRoutes);
-app.use("/pos", posRoutes);
-app.use("/reports", reportRoutes);
-app.use("/users", userRoutes);
-app.use("/dashboard", dashboardRoutes);
-app.use("/held-carts", heldCartRoutes);
-app.use("/qz", qzRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/shops", shopRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/products", productRoutes);
+app.use("/api", stockRoutes);
+app.use("/api/pos", posRoutes);
+app.use("/api/reports", reportRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/held-carts", heldCartRoutes);
+app.use("/api/qz", qzRoutes);
 
+const frontendBuildPath = path.resolve(__dirname, "../../Frontend/dist");
+app.use(express.static(frontendBuildPath));
+
+app.get(/^(?!\/api).*/, (req, res, next) => {
+  res.sendFile(path.join(frontendBuildPath, "index.html"), (error) => {
+    if (error) next(error);
+  });
+});
 
 app.use((err, req, res, next) => {
   console.error(err);

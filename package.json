@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "build": "npm install --prefix Server && npm install --prefix Frontend --include=dev && npm run build --prefix Frontend",
+    "start": "node Server/src/server.js"
+  },
   "dependencies": {
     "react-router-dom": "^7.18.3"
   }
